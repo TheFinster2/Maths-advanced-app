@@ -131,12 +131,25 @@ MQ.Screens.home = function (view) {
   }));
   view.appendChild(card);
 
-  /* ── the reference library, one tap away ── */
-  view.appendChild(U.el("h2", { text: "Need a formula?" }));
-  view.appendChild(U.el("button", {
-    class: "btn btn-ghost btn-block", text: "📖 Open the Reference Library",
-    on: { click: () => UI.go("/reference") }
-  }));
+  /* ── the formula sheet, one tap away ── */
+  view.appendChild(U.el("h2", {}, [
+    document.createTextNode("Need a formula?"),
+    U.el("span", { class: "h2-sub",
+      text: MQ.Formulas.onSheet().length + " of " + MQ.Formulas.all().length + " are on the HSC sheet" })
+  ]));
+  view.appendChild(U.el("div", { class: "grid g2" }, [
+    U.el("button", {
+      class: "btn btn-primary btn-block", text: "📄 Formula Sheet",
+      on: { click: () => UI.go("/formulas") }
+    }),
+    U.el("button", {
+      class: "btn btn-ghost btn-block", text: "📖 Reference Library",
+      on: { click: () => UI.go("/reference") }
+    })
+  ]));
+  view.appendChild(U.el("p", { class: "tiny muted", style: "margin-top:8px", text:
+    "Both mark whether NESA prints a formula on the sheet you get in the exam. " +
+    "The Formula Sheet is also available inside every game — tap 📄 while you play." }));
 
   function tile(num, label) {
     return U.el("div", { class: "card stat-tile" }, [

@@ -6,7 +6,7 @@ window.MQ = window.MQ || {};
 /* Shown in Settings. "What version am I actually on?" has to be answerable,
    or an update problem cannot be diagnosed at all. Keep in step with CACHE
    in sw.js — the validator asserts they match. */
-MQ.VERSION = "1.0.0";
+MQ.VERSION = "1.1.0";
 
 (function () {
   const U = MQ.U, S = MQ.State, UI = MQ.UI;
@@ -17,6 +17,7 @@ MQ.VERSION = "1.0.0";
   document.documentElement.dataset.theme =
     S.ownsTheme(S.data.profile.theme) ? S.data.profile.theme : "graph";
   document.documentElement.dataset.motion = S.data.settings.motion ? "on" : "off";
+  document.documentElement.dataset.text = MQ.Screens.textSizeKey(S.data.settings.textScale);
   MQ.Sound.setEnabled(S.data.settings.sound);
   MQ.Sound.setVolume(S.data.settings.volume);
   MQ.FX.setReduced(!S.data.settings.motion);
@@ -27,6 +28,7 @@ MQ.VERSION = "1.0.0";
   UI.route("game",   (view, args) => MQ.Screens.play.dispatch(view, args));
   UI.route("study",  (view, args) => MQ.Screens.study.screen(view, args));
   UI.route("reference", (view, args) => MQ.Screens.reference(view, args));
+  UI.route("formulas",     view => MQ.Screens.formulas(view));
   UI.route("progress",     view => MQ.Screens.progress(view));
   UI.route("shop",         view => MQ.Screens.shop(view));
   UI.route("arcade", (view, args) => MQ.Arcade.screen(view, args));

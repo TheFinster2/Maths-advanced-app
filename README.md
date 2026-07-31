@@ -19,8 +19,10 @@ Built from `MATHS-BRIEF-ADVANCED-EXT1.md` and its addendum, using
 | **75 procedural generators** | Calculation Crunch never repeats and never runs out |
 | **20 proof puzzles** | 12 derivations and 8 inductions |
 | **84 achievements** | Extension-only ones hide themselves on an Advanced build |
-| **18 reference sheets** | The whole formula sheet, searchable |
+| **124 formulas** | Flat, searchable, and each one labelled with whether NESA prints it on the exam reference sheet |
+| **17 reference sheets** | The long-form tables, with the same labelling per row |
 | **13 game modes + 6 bosses + 3 arcade games** | |
+| **A toolbelt in every mode** | The formula sheet and a working-out pad, without leaving the question |
 
 ### Game modes
 
@@ -47,6 +49,57 @@ wrong; The Integrator hides the topic label; Sigma randomises which power-ups
 you may use; and The Inductor *(Ext 1)* runs three phases, where failing one
 restarts **that phase**, not the fight. Beat all of them to unlock **The Final
 Paper**, a mixed 25-question gauntlet.
+
+---
+
+## The formula sheet, and the thing nobody tells you about it
+
+In the exam you are handed the NESA *Mathematics Advanced / Extension 1 /
+Extension 2 Reference Sheet*. Everything printed on it is free. Everything
+**not** on it you have to carry in your head — and the gap between the two is
+the actual revision task. Students memorise the quadratic formula (printed, so
+free) and then lose a question because they assumed the annuity formulas were
+printed too. They are not. Neither are the exact-value triangles, the log laws,
+the projectile equations, the vector projections, or the double-angle formulas.
+
+So every formula in this app carries a flag:
+
+| | |
+|---|---|
+| ✅ **HSC sheet** | Printed. Look it up in the exam, do not burn memory on it. |
+| 🧠 **Memorise** | Not printed. Nobody is giving you this one. |
+
+It shows up in three places:
+
+- **📄 Formula Sheet** (`#/formulas`) — 124 formulas, flat and searchable,
+  filterable to just the printed ones or just the ones you have to learn.
+- **📖 Reference Library** (`#/reference`) — the 17 long-form teaching tables,
+  with the marker on each individual row.
+- **The in-play toolbelt** — the same list, over the top of whatever you are
+  playing.
+
+`js/data/formulas.js` is the single source of truth for the flags, and its
+header says plainly that NESA revises the sheet and that a wrong ✅ is worse
+than no label at all. The app repeats that warning on screen. If you are
+updating it, open the current PDF — do not trust memory.
+
+## The toolbelt
+
+Every game mode mounts two buttons in the bottom-right corner.
+
+**📄 Formulas** opens the formula sheet as a bottom sheet over the question.
+Formulas on the NESA sheet are visible immediately and cost nothing, because
+that is exactly what happens in the exam. Formulas *not* on the sheet are
+behind a **Tap to reveal**, and revealing one drops the run to **80% XP** —
+priced like every other crutch in the app, and it **latches**: closing the
+sheet does not refund it. That asymmetry is the whole design. Outside a run,
+on `#/formulas`, everything is free and nothing is hidden.
+
+**✏️ Working** opens a scribble canvas and a notes field. Draw with a finger
+or a stylus, undo, four pen colours, three widths; or type. It is free and
+always will be — working out is not a crutch, it is the subject. Strokes are
+stored as normalised coordinates so rotating the phone redraws the working
+instead of scrambling it; typed notes persist to the save file (capped at 4 kB).
 
 ---
 
@@ -80,6 +133,23 @@ the app without the offline caching.
 Progress lives in `localStorage`, so it is per-device. **Settings → Export
 save** writes a JSON file you can import on another phone.
 
+#### Reading it on a phone
+
+The layout gets **bigger** below 560 px, not smaller — question text, answer
+choices, formulas, reference tables and worked explanations all step up, and it
+is the decorative chrome that gives way. Every tap target clears ~44 px, and
+the results modal docks to the bottom of the screen rather than floating in the
+middle, where the buttons are out of thumb reach.
+
+**Settings → Text size** offers Normal / Large / Largest on top of that, with a
+live sample so you can see what you are choosing. It scales the surfaces you
+read and deliberately leaves the game boards alone: a blanket zoom reflows every
+card in the app and pushes the answer buttons off a 360 px screen.
+
+`tests/smoke.js` checks every screen for horizontal overflow at both 390 px and
+360 px, which catches the whole class of "a nested fraction pushed the page
+wider than the phone" regressions.
+
 ---
 
 ## Advanced only, or Advanced + Extension 1
@@ -112,11 +182,11 @@ thing stopping the toggle from rotting.
 ## Testing
 
 ```bash
-node tests/validate.js     # content — no browser needed, run this constantly
-node tests/smoke.js        # every screen and mode, zero console errors
-node tests/exploit.js      # the farming bot AND the honest player
-node tests/arcade.js       # the arcade provably earns nothing
-node tests/offline.js      # subpath, offline, and PWA update handling
+node tests/validate.js     # 137 checks — content, no browser needed, run this constantly
+node tests/smoke.js        #  65 checks — every screen and mode, zero console errors
+node tests/exploit.js      #  30 checks — the farming bot AND the honest player
+node tests/arcade.js       #  27 checks — the arcade provably earns nothing
+node tests/offline.js      #  32 checks — subpath, offline, and PWA update handling
 ```
 
 The browser tests need `playwright-core`:
@@ -138,8 +208,17 @@ BREAK=answer-first node tests/validate.js
 
 This deletes a specific guard with a regex, checks the patched file still
 parses, and then asserts the suite **fails**. A test that passes with its fix
-removed is worthless. Five guards are covered: `answer-first`, `tier-filter`,
-`escape`, `domain`, `minclean`.
+removed is worthless. Seven guards are covered:
+
+| `BREAK=` | The guard it deletes |
+|---|---|
+| `answer-first` | Generators derive the answer independently of `make()` |
+| `tier-filter` | The question bank filters on the tier toggle |
+| `escape` | The renderer escapes HTML *before* substituting |
+| `domain` | Equivalence checking respects a declared domain |
+| `minclean` | Equivalence requires enough defined sample points |
+| `curve-dupe` | Read the Curve never offers the same curve twice |
+| `nesa-flag` | The ✅/🧠 labels are what NESA actually prints |
 
 ---
 
@@ -255,9 +334,14 @@ XP/hour**. The user found it, not the tests.
 - The Proof Builder's **restart button carries its cost**: the moves already
   spent stay on the clock, so "probe, restart, run it clean" is never cheaper.
 - Optional crutches — the Equivalence Engine's live check, the Calculus Lab's
-  gradient readout — **latch on first use** and are never refunded. Switching
-  one off before submitting used to refund the cost, which made it free and
-  therefore mandatory.
+  gradient readout, revealing an off-sheet formula in the toolbelt — **latch on
+  first use** and are never refunded. Switching one off before submitting used
+  to refund the cost, which made it free and therefore mandatory.
+- The toolbelt's formula crutch is priced the way the exam prices it: formulas
+  NESA prints are free to read, formulas it does not print cost 20% of the run.
+  Charged inside `UI.award()`, so no mode can forget it, and reported on the
+  results screen by the shell rather than by each mode — a crutch nobody
+  mentions is a crutch nobody notices paying for.
 - Table Panic scores **net** (right − wrong), gives no time bonus below 75%
   accuracy, and re-draws any board where one answer holds more than 40% of the
   cells — an accidentally uniform board makes "tap the same thing sixteen
@@ -309,6 +393,26 @@ bug from the fix.
 - **Verify the NESA topic codes** before writing another 400 questions. They are
   correct as of the last syllabus revision the author is aware of, but codes get
   renumbered and checking now is much cheaper than re-tagging later.
+- **Re-check the ✅ / 🧠 flags against the current reference sheet** whenever
+  NESA revises it. `js/data/formulas.js` holds them, and the reference tables
+  mark the same thing with a leading `*` on the row's first cell (strip it with
+  `MQ.Reference.cells()`, test it with `MQ.Reference.isNesa()`). A formula
+  wrongly marked ✅ teaches a student not to learn something nobody is going to
+  give them, which is worse than shipping no label at all. `BREAK=nesa-flag`
+  proves the spot-checks that cover this actually fail when a flag is wrong.
+- **Indices are `<sup>`/`<sub>`, never Unicode.** The renderer used to swap
+  single characters for `²` and `ⁿ` and fall back to tags for anything longer;
+  the Unicode glyphs come from whatever fallback font the device has, at that
+  font's own size and baseline, so `sin⁻¹x` sat visibly higher than `sin² x` on
+  the same line. All the index positioning lives in the `sub,sup` rule in
+  `styles.css` now. `mathText()` converts back to Unicode for plain-text and
+  aria use, where alignment does not exist.
+- **Distractors must differ in what the student SEES.** Read the Curve
+  deduplicated its options by label and shipped two identical graphs, because a
+  fallback distractor invented a new equation string and reused the correct
+  answer's parameters. `sameCurve()` now samples both functions across the
+  plotting window and rejects any pair that draws the same picture — including
+  the case where they are undefined in the same places.
 - `MQ.__current` is a documented test hook holding the current answer, so
   `exploit.js` can drive an honest player as well as a farming one. It is not a
   security hole — anyone with a console can already call `State.addXP()`, and

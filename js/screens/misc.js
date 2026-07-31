@@ -32,6 +32,20 @@ MQ.Screens.achievements = function (view) {
   view.appendChild(grid);
 };
 
+/* Three steps, not a slider. A slider invites fiddling with a number nobody
+   can evaluate; three named sizes are a choice you make once. Applied to
+   <html> at boot in app.js so it is in place before the first paint. */
+MQ.Screens.TEXT_SIZES = [
+  { id: "md", scale: 1,    name: "Normal",  desc: "The default." },
+  { id: "lg", scale: 1.12, name: "Large",   desc: "Bigger question text, formulas and tables." },
+  { id: "xl", scale: 1.26, name: "Largest", desc: "For reading on a phone at arm's length." }
+];
+MQ.Screens.textSizeKey = function (scale) {
+  const s = Number(scale) || 1;
+  const found = MQ.Screens.TEXT_SIZES.slice().reverse().find(t => s >= t.scale);
+  return found ? found.id : "md";
+};
+
 /* ── settings ─────────────────────────────────────────────── */
 MQ.Screens.settings = function (view) {
   const U = MQ.U, S = MQ.State, UI = MQ.UI;
@@ -68,6 +82,34 @@ MQ.Screens.settings = function (view) {
   view.appendChild(U.el("p", { class: "tiny muted", style: "margin-top:8px", text:
     "This changes how hard the SCORING is. It is separate from which syllabus tier this build ships — " +
     "see the Build panel below." }));
+
+  /* text size */
+  view.appendChild(U.el("h2", {}, [
+    document.createTextNode("Text size"),
+    U.el("span", { class: "h2-sub", text: "questions, formulas and tables" })
+  ]));
+  const sizeRow = U.el("div", { class: "row" });
+  MQ.Screens.TEXT_SIZES.forEach(t => {
+    const on = MQ.Screens.textSizeKey(d.settings.textScale) === t.id;
+    const b = U.el("button", { class: "btn" + (on ? " btn-primary" : ""), text: t.name,
+      style: "flex:1; min-width:96px",
+      on: { click: () => {
+        d.settings.textScale = t.scale;
+        document.documentElement.dataset.text = t.id;
+        S.save();
+        MQ.Sound.equip();
+        UI.handleRoute();
+      } } });
+    sizeRow.appendChild(b);
+  });
+  view.appendChild(U.el("div", { class: "card grid" }, [
+    sizeRow,
+    U.el("p", { class: "tiny muted", style: "margin:0", text:
+      MQ.Screens.TEXT_SIZES.find(t => MQ.Screens.textSizeKey(d.settings.textScale) === t.id).desc }),
+    U.el("div", { class: "qcard", style: "padding:14px" }, [
+      U.el("div", { class: "qtext math", html: U.math("Differentiate y = \\frac{sin^2 x}{e^{3x}} and hence find f'(0).") })
+    ])
+  ]));
 
   /* toggles */
   view.appendChild(U.el("h2", { text: "Preferences" }));

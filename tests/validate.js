@@ -120,6 +120,7 @@ const DATA_FILES = [
   "js/data/flashcards.js",
   "js/data/proofs.js",
   "js/data/reference.js",
+  "js/data/formulas.js",
   "js/data/shop.js",
   "js/data/achievements.js",
   "js/data/arcade.js"
@@ -135,6 +136,17 @@ const BREAKS = {
     /return render\(derivPrepass\(escapeHtml\(String\(str\)\)\)\);/, "return render(derivPrepass(String(str)));"],
   "domain": ["js/core/expr.js",
     /const \[lo, hi\] = o\.domain \|\| DEFAULT_DOMAIN;/, "const [lo, hi] = DEFAULT_DOMAIN;"],
+  /* The curve bug as it actually shipped: the fallback distractor invented a
+     new label and reused the KEY'S parameters, so a reverse round drew the
+     correct graph twice. */
+  "curve-dupe": ["js/games/curve.js",
+    /const base = paramSets\[1 \+ Math\.floor\(rng\(\) \* \(paramSets\.length - 1\)\)\] \|\| params;\n      accept\(fam\.vary\(base, rng\)\);/,
+    "labels.push(key + ' + ' + guard); paramSets.push(params);"],
+  /* A NESA flag set to the wrong value is the one failure mode this feature
+     has that a student would never catch. */
+  "nesa-flag": ["js/data/formulas.js",
+    /\{id:"f-fv",\s+g:"series", tier:"MA", nesa:false,/,
+    '{id:"f-fv", g:"series", tier:"MA", nesa:true,'],
   "minclean": ["js/core/expr.js",
     /if \(clean < minClean\) return \{ equal: false, reason: "undefined", clean \};/, ""]
 };
@@ -339,8 +351,9 @@ section("Renderer");
   MQ.DATA.reference.forEach(r => {
     strings.push(r.title, r.blurb, r.note || "");
     r.cols.forEach(c => strings.push(c));
-    r.rows.forEach(row => row.forEach(c => strings.push(c)));
+    r.rows.forEach(row => MQ.Reference.cells(row).forEach(c => strings.push(c)));
   });
+  MQ.DATA.formulas.forEach(f => { strings.push(f.name, f.tex, f.hint || ""); });
 
   let unbalanced = 0, leftover = 0, rawTag = 0, empty = 0;
   const KNOWN = /\\(frac|dfrac|tfrac|binom|sqrt|vec|bar|overline|hat|abs|norm|text|mathbb|ang|int|iint|oint|sum|prod|lim|limsup|liminf|[a-zA-Z]+)/g;
@@ -378,6 +391,99 @@ section("Renderer");
   const deep = U.math("\\frac{\\frac{1}{\\sqrt{\\frac{a}{b}}}}{2}");
   ok((deep.match(/class="frac"/g) || []).length === 3, "fractions nest three deep") &&
     pass("nested fractions render");
+}
+
+/* -- 5b. the formula sheet and its NESA flags ------------------
+   The flag is the entire value of this feature. A formula wrongly marked
+   "printed on the reference sheet" teaches a student not to learn something
+   nobody is going to give them, so the shape of the data is checked hard even
+   though its truth can only be checked against NESA's PDF by a human. */
+section("Formula sheet");
+{
+  const F = MQ.DATA.formulas;
+  const groupIds = MQ.DATA.formulaGroups.map(g => g.id);
+
+  ok(F.length >= 120, "the formula sheet is a sheet, not a sample", F.length + " formulas");
+
+  const ids = F.map(f => f.id);
+  ok(new Set(ids).size === ids.length, "formula ids are unique",
+    ids.filter((id, i) => ids.indexOf(id) !== i).join(", "));
+
+  const badGroup = F.filter(f => groupIds.indexOf(f.g) < 0);
+  ok(badGroup.length === 0, "every formula sits in a declared group",
+    badGroup.map(f => f.id).join(", "));
+
+  const badTier = F.filter(f => ["MA", "ME"].indexOf(f.tier) < 0);
+  ok(badTier.length === 0, "every formula declares a tier", badTier.map(f => f.id).join(", "));
+
+  /* A missing flag reads as false in JS, which would silently mark a printed
+     formula "memorise". Require the property to be an actual boolean. */
+  const badFlag = F.filter(f => typeof f.nesa !== "boolean");
+  ok(badFlag.length === 0, "every formula declares nesa as a boolean, not by omission",
+    badFlag.map(f => f.id).join(", "));
+
+  const noName = F.filter(f => !f.name || !f.tex);
+  ok(noName.length === 0, "every formula has a name and a body", noName.map(f => f.id).join(", "));
+
+  /* Both lists have to be substantial or the distinction is decorative. */
+  const printed = F.filter(f => f.nesa).length;
+  ok(printed >= 40, "enough formulas are marked as printed to be useful", printed + " printed");
+  ok(F.length - printed >= 40, "enough are marked memorise-only",
+    (F.length - printed) + " to memorise");
+
+  /* Spot-checks against facts about the NESA sheet that do NOT change with a
+     revision, and that the app would be actively misleading if it got wrong. */
+  const flagOf = id => { const f = F.find(x => x.id === id); return f && f.nesa; };
+  const spot = [
+    ["f-quad",    true,  "the quadratic formula is printed"],
+    ["f-ci",      true,  "compound interest is printed"],
+    ["f-dquot",   true,  "the quotient rule is printed"],
+    ["f-z",       true,  "the z-score is printed"],
+    ["f-fv",      false, "annuity future value is NOT printed"],
+    ["f-exact",   false, "exact trig values are NOT printed"],
+    ["f-vproj",   false, "vector projections are NOT printed"],
+    ["f-proj-r",  false, "the projectile range formula is NOT printed"],
+    ["f-logprod", false, "the log laws are NOT printed"]
+  ];
+  let wrong = 0;
+  spot.forEach(([id, want, why]) => {
+    const got = flagOf(id);
+    if (got !== want) { wrong++; console.log("      " + why + " - flag reads " + got); }
+  });
+  ok(wrong === 0, "the spot-checked NESA flags are right");
+
+  /* Tier filtering, same mechanism as every other bank. */
+  const leaked = MQ.Formulas.all().filter(f => MQ.DATA.TIERS.indexOf(f.tier) < 0);
+  ok(leaked.length === 0, "MQ.Formulas.all() respects the tier toggle",
+    leaked.map(f => f.id).join(", "));
+
+  ok(MQ.Formulas.search("quotient").length > 0, "search finds a formula by name");
+  ok(MQ.Formulas.search("zzzznothing").length === 0, "search returns nothing for nonsense");
+  ok(MQ.Formulas.grouped("", "sheet").every(sec => sec.items.every(f => f.nesa)),
+    "the on-the-sheet filter really filters");
+  ok(MQ.Formulas.grouped("", "learn").every(sec => sec.items.every(f => !f.nesa)),
+    "the memorise filter really filters");
+
+  /* The reference tables carry the same marker, via the leading asterisk. */
+  let markers = 0, stripped = 0;
+  MQ.DATA.reference.forEach(r => r.rows.forEach(row => {
+    if (MQ.Reference.isNesa(row)) markers++;
+    if (/^\*/.test(MQ.Reference.cells(row)[0])) stripped++;
+  }));
+  ok(markers > 0, "the reference tables mark printed rows too", markers + " marked rows");
+  ok(stripped === 0, "MQ.Reference.cells() strips the marker before rendering");
+
+  /* Every row must have as many cells as the sheet has columns, or a marker
+     edit has knocked a table out of shape. */
+  const ragged = [];
+  MQ.DATA.reference.forEach(r => r.rows.forEach((row, i) => {
+    if (row.length !== r.cols.length) ragged.push(r.id + " row " + i);
+  }));
+  ok(ragged.length === 0, "every reference row matches its column count", ragged.join(", "));
+
+  pass("formula sheet", `${F.length} formulas · ${printed} on the NESA sheet · ${F.length - printed} to memorise`);
+  pass("reference tables carry the marker too", markers + " printed rows across " +
+    MQ.DATA.reference.length + " sheets");
 }
 
 /* ── 6. equivalence checking, and its four traps ────────────── */
@@ -558,6 +664,65 @@ section("Generated boards");
     // why the game constrains it. This just proves the risk is real.
     pass("uniform-board risk measured", `${uniform} of ${tables.length * 200} raw draws exceed 60%`);
   }
+}
+
+/* -- 10b. Read the Curve: four DISTINCT curves ----------------
+   A reverse round ("which graph shows this equation?") draws one canvas per
+   option, so two options that draw the same picture make the question
+   unanswerable and mark a correct pick wrong. Deduplicating the LABELS is not
+   enough to prevent it, which is exactly how the bug shipped: the old
+   fallback distractor invented a new label and reused the key's parameters.
+
+   Run the real buildRound() over a few thousand seeds and compare the drawn
+   curves, not the strings. */
+section("Curve rounds");
+{
+  /* Read through applyBreak so BREAK=curve-dupe can reinstate the bug and
+     prove these checks would have caught it. */
+  const src = applyBreak("js/games/curve.js",
+    fs.readFileSync(path.join(ROOT, "js/games/curve.js"), "utf8"));
+  vm.runInContext(src, ctxFull);
+  const G = ctxFull.MQ.Games.curve;
+  ok(typeof G.buildRound === "function", "buildRound is exposed for testing");
+
+  let dupCurve = 0, dupLabel = 0, short = 0, samples = 0;
+  const seen = {};
+  if (G.buildRound) {
+    for (let i = 0; i < 3000; i++) {
+      const r = G.buildRound("v-" + i);
+      samples++;
+      seen[r.fam.id] = (seen[r.fam.id] || 0) + 1;
+      if (r.labels.length !== 4 || r.paramSets.length !== 4) {
+        short++;
+        continue;
+      }
+      if (new Set(r.labels).size !== 4) {
+        dupLabel++;
+        if (dupLabel < 4) console.log("      duplicate label: " + r.labels.join(" | "));
+      }
+      for (let a = 0; a < 4; a++) {
+        for (let b = a + 1; b < 4; b++) {
+          if (G.sameCurve(r.fam, r.paramSets[a], r.paramSets[b])) {
+            dupCurve++;
+            if (dupCurve < 4) {
+              console.log("      identical curves in " + r.fam.id + ": " +
+                r.labels[a] + "  ==  " + r.labels[b]);
+            }
+          }
+        }
+      }
+    }
+  }
+  ok(short === 0, "every round offers exactly four options", short + " short rounds");
+  ok(dupLabel === 0, "no round repeats an equation", dupLabel + " rounds");
+  ok(dupCurve === 0, "no round draws the same curve twice", dupCurve + " pairs");
+
+  // Every family must actually come up, or a broken one could hide behind
+  // never being drawn.
+  const families = Object.keys(seen).length;
+  ok(families >= 10, "the seeds reach the whole family list", families + " families in " + samples + " rounds");
+
+  pass("curve rounds are four distinct curves", `${samples} rounds · ${families} families`);
 }
 
 /* ── 11. the tier toggle ──────────────────────────────────────

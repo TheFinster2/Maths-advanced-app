@@ -195,7 +195,12 @@ MQ.UI = (function () {
 
     // Difficulty and ascension multipliers apply here and nowhere else.
     const mult = o.raw ? 1 : S.xpMultiplier();
-    const xp = Math.round((Math.max(0, o.xp || 0) + bonus) * mult);
+    /* The Toolbelt's off-sheet formula crutch is charged here for the same
+       reason the accuracy gate is: one function, no mode can forget it. It
+       LATCHES for the run (see toolbelt.js), and every mode reports got.xp
+       rather than what it computed, so the results screen shows the truth. */
+    const crutch = o.raw ? 1 : formulaPenalty();
+    const xp = Math.round((Math.max(0, o.xp || 0) + bonus) * mult * crutch);
     // Primes are deliberately scarcer than XP: payouts scale to 60%.
     const coins = Math.round((o.coins || 0) * (o.raw ? 1 : 0.6));
 
@@ -205,6 +210,7 @@ MQ.UI = (function () {
     res.xp = xp;
     res.coins = coins;
     res.multiplier = mult;
+    res.formulaCrutch = crutch;
 
     if (o.at && xp && !o.silent) {
       const r = o.at.getBoundingClientRect();
@@ -242,10 +248,21 @@ MQ.UI = (function () {
     return res;
   }
 
+  /** The XP multiplier the Toolbelt has charged this run: 1, or 0.8 once an
+      off-sheet formula has been revealed. Lives here so award() and results()
+      agree, and so a build without the Toolbelt degrades to "no penalty". */
+  function formulaPenalty() {
+    return MQ.Toolbelt && MQ.Toolbelt.penalty ? MQ.Toolbelt.penalty() : 1;
+  }
+
   /* ── shared game chrome ──────────────────────────────────── */
   /**
    * Returns { root, body, meta } — append the playfield to `body`,
    * status chips to `meta`.
+   *
+   * Every game shell also mounts the Toolbelt (formula sheet + working-out
+   * pad) and resets its run-scoped crutch latch. Pass `toolbelt:false` for
+   * screens that are reference material rather than a scored run.
    */
   function gameShell(title, opts) {
     const o = opts || {};
@@ -275,6 +292,7 @@ MQ.UI = (function () {
         ])) }
       }), meta);
     }
+    if (MQ.Toolbelt && o.toolbelt !== false) MQ.Toolbelt.mount({ scored: o.scored !== false });
     return { root: U.el("div", { class: "gshell" }, [head, body]), body, meta };
   }
 
@@ -308,6 +326,11 @@ MQ.UI = (function () {
       ["Accuracy", acc + "%"],
       ["XP", "+" + o.xp]
     ].concat(o.extraStats || []);
+
+    /* Reported by the shell rather than by each mode: a crutch that no mode
+       remembered to mention would be a crutch nobody notices paying for. */
+    const looks = MQ.Toolbelt && MQ.Toolbelt.lookups ? MQ.Toolbelt.lookups() : 0;
+    if (looks) cells.push(["Off-sheet lookups", looks + " · ×" + formulaPenalty()]);
 
     modal(U.el("div", { class: "modal-center" }, [
       U.el("div", { class: "modal-big " + r.cls, text: r.rank }),
@@ -366,5 +389,5 @@ MQ.UI = (function () {
 
   return { route, go, init, handleRoute, syncHeader, applyTheme, toast, modal, closeModal,
            confirmDialog, award, gameShell, results, rank, chip, tierChip, onLeave, pulse,
-           MIN_BONUS_ACCURACY, MIN_READ_MS };
+           formulaPenalty, MIN_BONUS_ACCURACY, MIN_READ_MS };
 })();

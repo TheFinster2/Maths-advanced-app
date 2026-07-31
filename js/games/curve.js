@@ -118,6 +118,38 @@ MQ.Games.curve = (function () {
 
   const families = () => FAMILIES.filter(f => MQ.DATA.tierEnabled(f.topic));
 
+  /**
+   * Do two parameter sets DRAW the same curve?
+   *
+   * Distinct labels are not enough, and assuming they were is what put two
+   * identical graphs in the same reverse round. A reverse round renders one
+   * canvas per option, so the thing that has to be distinct is the picture,
+   * not the string above it. Sample the family across its own window and
+   * compare — the same numeric approach MQ.Expr uses for algebra, for the
+   * same reason: there is no reliable symbolic shortcut.
+   *
+   * The undefined pattern is part of the curve. y = ln(x-1) and y = ln(x-3)
+   * agree nowhere they are both defined, but a comparison that skipped
+   * non-finite samples on both sides would have nothing left to disagree on.
+   */
+  function sameCurve(fam, p1, p2) {
+    const [x0, x1] = fam.win;                 // win is [x0, x1, y0, y1]
+    const f1 = fam.f(p1), f2 = fam.f(p2);
+    const N = 33;
+    for (let i = 0; i < N; i++) {
+      const x = x0 + ((x1 - x0) * i) / (N - 1);
+      const a = f1(x), b = f2(x);
+      const aOk = isFinite(a), bOk = isFinite(b);
+      if (aOk !== bOk) return false;          // different domains: different curves
+      if (!aOk) continue;
+      if (Math.abs(a - b) > 1e-9 * Math.max(1, Math.abs(a), Math.abs(b))) return false;
+    }
+    /* Nothing disagreed. Note this also returns true when both are undefined
+       across the whole window, which is the safe way round: the caller retries
+       rather than shipping a pair it cannot tell apart. */
+    return true;
+  }
+
   /** Build one round. Exposed so the validator can generate rounds headlessly. */
   function buildRound(seed) {
     const rng = U.seededRandom(U.hash(String(seed)));
@@ -125,26 +157,43 @@ MQ.Games.curve = (function () {
     const params = fam.pick(rng);
     const key = fam.label(params);
 
-    // Distractors: perturb ONE parameter each, and reject any that renders
-    // identically to the key or to another distractor.
     const labels = [key];
     const paramSets = [params];
-    let guard = 0;
-    while (labels.length < 4 && guard++ < 200) {
-      const p2 = fam.vary(params, rng);
+
+    /* A candidate is only accepted if BOTH its label and its curve are new. */
+    const accept = p2 => {
       const l2 = fam.label(p2);
-      if (labels.includes(l2)) continue;
+      if (labels.includes(l2)) return false;
+      if (paramSets.some(p => sameCurve(fam, p, p2))) return false;
       labels.push(l2);
       paramSets.push(p2);
+      return true;
+    };
+
+    // Distractors: perturb ONE parameter each.
+    let guard = 0;
+    while (labels.length < 4 && guard++ < 200) accept(fam.vary(params, rng));
+
+    /* Fallback, for a family whose vary() is too narrow to yield four
+       distinct curves from one seed.
+
+       The old fallback invented a label ("y = 2x + 1 + 3") and then pushed the
+       KEY'S OWN parameters alongside it. In an equation round that reads as a
+       clumsy distractor; in a reverse round it draws a second, pixel-identical
+       copy of the correct graph, marked wrong. Compose perturbations instead —
+       vary() applied to an already-varied set moves the curve again, and every
+       candidate still goes through accept(). */
+    guard = 0;
+    while (labels.length < 4 && guard++ < 400) {
+      const base = paramSets[1 + Math.floor(rng() * (paramSets.length - 1))] || params;
+      accept(fam.vary(base, rng));
     }
-    // If a family is too small to yield four distinct labels, fall back to
-    // shifting the constant, which every family tolerates.
-    let bump = 1;
-    while (labels.length < 4) {
-      const l = key + " + " + bump;
-      if (!labels.includes(l)) { labels.push(l); paramSets.push(params); }
-      bump++;
-    }
+
+    /* Last resort: a different family's round entirely, rather than shipping
+       fewer than four options or a duplicate. Recursion is bounded because the
+       seed changes and `fam` is redrawn. */
+    if (labels.length < 4) return buildRound(String(seed) + "-r");
+
     return { fam, params, key, labels, paramSets, reverse: rng() < 0.35 };
   }
 
@@ -350,5 +399,5 @@ MQ.Games.curve = (function () {
     render();
   }
 
-  return { start, buildRound, FAMILIES };
+  return { start, buildRound, sameCurve, FAMILIES };
 })();

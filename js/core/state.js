@@ -25,7 +25,7 @@ MQ.State = (function () {
       mistakesFixed: 0, peakCoins: 100, nightOwl: false, earlyBird: false,
       timePlayed: 0, survivalBest: 0, hardWins: 0, nightmareWins: 0,
       cardsMastered: 0, questsDone: 0, extAnswered: 0, extCorrect: 0,
-      finalPaperBest: 0, referenceReads: 0
+      finalPaperBest: 0, referenceReads: 0, formulaLookups: 0
     },
     topics: {},
     modesPlayed: {},
@@ -39,7 +39,12 @@ MQ.State = (function () {
     achievements: {},
     history: {},
     scores: {},
-    settings: { sound: true, motion: true, volume: 0.8, difficulty: "standard", radians: true },
+    settings: { sound: true, motion: true, volume: 0.8, difficulty: "standard", radians: true,
+                textScale: 1 },
+    /* The Toolbelt's typed working-out. Capped at 4 kB by the writer — a save
+       file that can grow without bound is a save file that eventually blows
+       the localStorage quota and takes the rest of the progress with it. */
+    scratch: "",
     daily: { day: null, progress: 0, claimed: false, spec: null },
     weekly: { week: null, baseline: null, quests: [], claimed: [] },
     arcade: { tickets: {}, scores: {}, played: {} }

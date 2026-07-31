@@ -3,7 +3,19 @@
    unit circle, the standard normal table).
 
    Reading reference material earns nothing. That is deliberate: it should be
-   the thing you reach for when stuck, not another XP faucet. */
+   the thing you reach for when stuck, not another XP faucet.
+
+   ── the leading asterisk ────────────────────────────────────────────────────
+   A row whose FIRST cell starts with "*" is printed on the NESA reference
+   sheet — the one you are handed in the exam. Everything else you have to
+   carry in your head. The marker lives in the data rather than in a parallel
+   array of indices because a parallel array silently rots the moment somebody
+   reorders a row, and a wrong "this is printed" flag is worse than no flag:
+   it teaches a student not to learn something nobody is going to give them.
+
+   Strip it with MQ.Reference.cells(row); test it with MQ.Reference.isNesa(row).
+   The flat, searchable version of the same information — the one the in-play
+   Toolbelt uses — lives in js/data/formulas.js. */
 window.MQ = window.MQ || {};
 MQ.DATA = MQ.DATA || {};
 
@@ -20,7 +32,7 @@ MQ.DATA.reference = [
    ["\\frac{pi}{2} (90 deg)","1",         "0",                  "undefined"],
    ["pi (180 deg)","0",                   "-1",                 "0"],
    ["\\frac{3pi}{2} (270 deg)","-1",      "0",                  "undefined"]],
- note:"The 30-60-90 triangle has sides 1, \\sqrt{3}, 2. The 45-45-90 triangle has sides 1, 1, \\sqrt{2}."},
+ note:"NONE of this table is on the NESA reference sheet. Rebuild it from the two triangles: 30-60-90 has sides 1, \\sqrt{3}, 2; 45-45-90 has sides 1, 1, \\sqrt{2}."},
 
 {id:"ref-quadrants",tier:"MA",icon:"🧭",title:"The unit circle and related angles",
  blurb:"Which functions are positive where, and how to reduce any angle.",
@@ -30,43 +42,45 @@ MQ.DATA.reference = [
    ["2nd","\\frac{pi}{2} to pi","Sine","pi - theta"],
    ["3rd","pi to \\frac{3pi}{2}","Tangent","theta - pi"],
    ["4th","\\frac{3pi}{2} to 2pi","Cosine","2pi - theta"]],
- note:"Reduce to the related acute angle, evaluate it, then attach the sign for the quadrant."},
+ note:"Not on the reference sheet. Reduce to the related acute angle, evaluate it, then attach the sign for the quadrant."},
 
 {id:"ref-derivs",tier:"MA",icon:"📉",title:"Derivatives",
- blurb:"Everything you may need to differentiate in Advanced.",
+ blurb:"Everything you may need to differentiate in Advanced. Almost all of it is printed.",
  cols:["f(x)","f'(x)"],
  rows:[
-   ["x^n","nx^{n-1}"],
-   ["e^{x}","e^{x}"],
-   ["e^{f(x)}","f'(x)e^{f(x)}"],
-   ["ln x","\\frac{1}{x}"],
-   ["ln f(x)","\\frac{f'(x)}{f(x)}"],
-   ["a^{x}","a^{x}ln a"],
-   ["sin x","cos x"],
-   ["cos x","-sin x"],
-   ["tan x","sec^2 x"],
-   ["uv","u'v + uv'"],
-   ["\\frac{u}{v}","\\frac{u'v - uv'}{v^2}"],
-   ["f(g(x))","f'(g(x))g'(x)"]],
- note:"Every chain-rule result is the outer derivative times the inner derivative — nothing else."},
+   ["*x^n","nx^{n-1}"],
+   ["*e^{x}","e^{x}"],
+   ["*e^{f(x)}","f'(x)e^{f(x)}"],
+   ["*ln x","\\frac{1}{x}"],
+   ["*ln f(x)","\\frac{f'(x)}{f(x)}"],
+   ["*a^{x}","a^{x}ln a"],
+   ["*sin x","cos x"],
+   ["*cos x","-sin x"],
+   ["*tan x","sec^2 x"],
+   ["*uv","u'v + uv'"],
+   ["*\\frac{u}{v}","\\frac{u'v - uv'}{v^2}"],
+   ["*f(g(x))","f'(g(x))g'(x)"],
+   ["\\text{first principles}","\\lim_{h to 0}\\frac{f(x+h)-f(x)}{h}"]],
+ note:"Every chain-rule result is the outer derivative times the inner derivative — nothing else. First principles is the one row here nobody prints for you."},
 
 {id:"ref-integrals",tier:"MA",icon:"📈",title:"Integrals",
  blurb:"The standard antiderivatives. Add + c to every indefinite one.",
  cols:["f(x)","int f(x) dx"],
  rows:[
-   ["x^n (n != -1)","\\frac{x^{n+1}}{n+1}"],
+   ["*x^n (n != -1)","\\frac{x^{n+1}}{n+1}"],
    ["(ax+b)^n","\\frac{(ax+b)^{n+1}}{a(n+1)}"],
-   ["\\frac{1}{x}","ln|x|"],
-   ["\\frac{f'(x)}{f(x)}","ln|f(x)|"],
-   ["e^{ax}","\\frac{1}{a}e^{ax}"],
-   ["a^{x}","\\frac{a^{x}}{ln a}"],
-   ["sin ax","-\\frac{1}{a}cos ax"],
-   ["cos ax","\\frac{1}{a}sin ax"],
-   ["sec^2 ax","\\frac{1}{a}tan ax"]],
- note:"Any antiderivative can be checked by differentiating it. Do that whenever you are unsure."},
+   ["*\\frac{1}{x}","ln|x|"],
+   ["*\\frac{f'(x)}{f(x)}","ln|f(x)|"],
+   ["*e^{ax}","\\frac{1}{a}e^{ax}"],
+   ["*a^{x}","\\frac{a^{x}}{ln a}"],
+   ["*sin ax","-\\frac{1}{a}cos ax"],
+   ["*cos ax","\\frac{1}{a}sin ax"],
+   ["*sec^2 ax","\\frac{1}{a}tan ax"],
+   ["\\text{area between curves}","\\int_{a}^{b}(y_{top} - y_{bot})dx"]],
+ note:"The printed rows are stated with f(x) inside rather than ax — same rule. The (ax+b)^n row is only the special case, but the 1/a is what people drop, so learn that shape anyway."},
 
 {id:"ref-logs",tier:"MA",icon:"🔟",title:"Index and logarithm laws",
- blurb:"The two sets are the same laws, read in opposite directions.",
+ blurb:"The two sets are the same laws, read in opposite directions — and almost none of them are printed.",
  cols:["Index law","Logarithm law"],
  rows:[
    ["a^m a^n = a^{m+n}","log(xy) = log x + log y"],
@@ -75,38 +89,41 @@ MQ.DATA.reference = [
    ["a^0 = 1","log_a 1 = 0"],
    ["a^1 = a","log_a a = 1"],
    ["a^{-n} = \\frac{1}{a^n}","log\\frac{1}{x} = -log x"],
-   ["a^{\\frac{m}{n}} = \\sqrt[n]{a^m}","log_b a = \\frac{ln a}{ln b}"]],
- note:"log x is undefined for x <= 0 — always check solutions of log equations back in the original."},
+   ["a^{\\frac{m}{n}} = \\sqrt[n]{a^m}","*log_b a = \\frac{ln a}{ln b}"],
+   ["*a^{x} = e^{x ln a}","*log_a a^{x} = x = a^{log_a x}"]],
+ note:"Only the last row and the change of base are printed. The three log laws in rows 1-3 are pure memory, and they are on every paper. log x is undefined for x <= 0 — always check solutions back in the original."},
 
 {id:"ref-finance",tier:"MA",icon:"💰",title:"Sequences, series and finance",
- blurb:"Everything in MA-M1 on one screen.",
+ blurb:"Everything in MA-M1 on one screen. The series are printed; the annuities are not.",
  cols:["Quantity","Formula"],
  rows:[
-   ["AP: nth term","T_n = a + (n-1)d"],
-   ["AP: sum","S_n = \\frac{n}{2}(2a + (n-1)d) = \\frac{n}{2}(a+l)"],
-   ["GP: nth term","T_n = ar^{n-1}"],
-   ["GP: sum","S_n = \\frac{a(r^n - 1)}{r - 1}"],
-   ["GP: limiting sum (|r| < 1)","S_inf = \\frac{a}{1-r}"],
-   ["Compound interest","A = P(1+r)^n"],
+   ["*AP: nth term","T_n = a + (n-1)d"],
+   ["*AP: sum","S_n = \\frac{n}{2}(2a + (n-1)d) = \\frac{n}{2}(a+l)"],
+   ["*GP: nth term","T_n = ar^{n-1}"],
+   ["*GP: sum","S_n = \\frac{a(r^n - 1)}{r - 1}"],
+   ["*GP: limiting sum (|r| < 1)","S_inf = \\frac{a}{1-r}"],
+   ["*Compound interest","A = P(1+r)^n"],
    ["Future value of an annuity","FV = M\\frac{(1+r)^n - 1}{r}"],
    ["Present value of an annuity","PV = M\\frac{1 - (1+r)^{-n}}{r}"],
    ["Reducing-balance loan","A_n = A_{n-1}(1+r) - M"]],
- note:"r is the rate PER PERIOD. Monthly compounding at 12% p.a. means r = 0.01, not 0.12."},
+ note:"The three unmarked rows are the ones students assume are printed and lose the question over. r is the rate PER PERIOD: monthly compounding at 12% p.a. means r = 0.01, not 0.12."},
 
 {id:"ref-stats",tier:"MA",icon:"📊",title:"Statistics and probability",
  blurb:"Rules, random variables and the normal distribution.",
  cols:["Quantity","Formula"],
  rows:[
-   ["Addition rule","P(A U B) = P(A) + P(B) - P(A n B)"],
-   ["Conditional probability","P(A|B) = \\frac{P(A n B)}{P(B)}"],
-   ["Independence test","P(A n B) = P(A)P(B)"],
-   ["Expected value","E(X) = Sum x P(X = x)"],
-   ["Variance","Var(X) = E(X^2) - [E(X)]^2"],
+   ["*Addition rule","P(A \\union B) = P(A) + P(B) - P(A \\inter B)"],
+   ["*Conditional probability","P(A|B) = \\frac{P(A \\inter B)}{P(B)}"],
+   ["*Independence test","P(A \\inter B) = P(A)P(B)"],
+   ["*Expected value","E(X) = mu"],
+   ["*Variance","Var(X) = E(X^2) - [E(X)]^2"],
    ["Linear transform","E(aX+b) = aE(X)+b, Var(aX+b) = a^2 Var(X)"],
-   ["z-score","z = \\frac{x - mu}{sigma}"],
-   ["Empirical rule","68% / 95% / 99.7% within 1, 2, 3 sd"],
-   ["Least-squares line","passes through (\\bar{x}, \\bar{y})"]],
- note:"The empirical rule is enough for almost every Advanced normal-distribution question."},
+   ["*z-score","z = \\frac{x - mu}{sigma}"],
+   ["*Empirical rule","68% / 95% / 99.7% within 1, 2, 3 sd"],
+   ["*Outliers","below Q_1 - 1.5 IQR or above Q_3 + 1.5 IQR"],
+   ["Least-squares line","passes through (\\bar{x}, \\bar{y})"],
+   ["Sample proportion","E(\\hat{p}) = p, Var(\\hat{p}) = \\frac{p(1-p)}{n}"]],
+ note:"The empirical rule is enough for almost every Advanced normal-distribution question. The linear-transform and sample-proportion rows are not printed."},
 
 {id:"ref-normal",tier:"MA",icon:"🔔",title:"Standard normal table",
  blurb:"P(Z < z) for the standard normal distribution.",
@@ -119,10 +136,10 @@ MQ.DATA.reference = [
    ["-1.0","0.1587","2.0","0.9772"],
    ["-0.5","0.3085","2.5","0.9938"],
    ["-0.25","0.4013","3.0","0.9987"]],
- note:"By symmetry, P(Z < -a) = 1 - P(Z < a). For an upper tail, subtract from 1."},
+ note:"No z-table is printed on the reference sheet — Advanced expects the empirical rule instead. By symmetry, P(Z < -a) = 1 - P(Z < a); for an upper tail, subtract from 1."},
 
 {id:"ref-funcs",tier:"MA",icon:"🪞",title:"Functions and transformations",
- blurb:"Reading a transformed function off its rule.",
+ blurb:"Reading a transformed function off its rule. None of it is printed.",
  cols:["Rule","Effect on y = f(x)"],
  rows:[
    ["y = f(x) + k","Shift k up"],
@@ -139,67 +156,74 @@ MQ.DATA.reference = [
  blurb:"Roots, sums, products and the shape of the parabola.",
  cols:["Quantity","Result"],
  rows:[
-   ["Quadratic formula","x = \\frac{-b +- \\sqrt{b^2-4ac}}{2a}"],
+   ["*Quadratic formula","x = \\frac{-b +- \\sqrt{b^2-4ac}}{2a}"],
    ["Discriminant","\\Delta = b^2 - 4ac"],
    ["\\Delta > 0","Two distinct real roots"],
    ["\\Delta = 0","One repeated root; the axis touches"],
    ["\\Delta < 0","No real roots"],
    ["Sum of roots","alpha + beta = -\\frac{b}{a}"],
    ["Product of roots","alpha beta = \\frac{c}{a}"],
-   ["Axis of symmetry","x = -\\frac{b}{2a}"]],
- note:"Completing the square gives the vertex directly: a(x-h)^2 + k has vertex (h, k)."},
+   ["*Cubic root sums","-\\frac{b}{a}, \\frac{c}{a}, -\\frac{d}{a}"],
+   ["Axis of symmetry","x = -\\frac{b}{2a}"],
+   ["*Circle, centre (h,k)","(x-h)^2 + (y-k)^2 = r^2"]],
+ note:"The odd one out: the CUBIC root relations are printed but the quadratic ones are not. Completing the square gives the vertex directly — a(x-h)^2 + k has vertex (h, k)."},
 
 /* ══════════ Extension 1 sheets ══════════ */
 
 {id:"ref-invtrig",tier:"ME",icon:"↩️",title:"Inverse trigonometric functions",
- blurb:"Domains, ranges and calculus. The ranges are the whole topic.",
+ blurb:"Domains, ranges and calculus. The ranges are the whole topic — and the ranges are not printed.",
  cols:["Function","Domain","Range","Derivative"],
  rows:[
-   ["sin^{-1}x","[-1, 1]","[-\\frac{pi}{2}, \\frac{pi}{2}]","\\frac{1}{\\sqrt{1-x^2}}"],
-   ["cos^{-1}x","[-1, 1]","[0, pi]","\\frac{-1}{\\sqrt{1-x^2}}"],
-   ["tan^{-1}x","all real x","(-\\frac{pi}{2}, \\frac{pi}{2})","\\frac{1}{1+x^2}"]],
- note:"sin^{-1}x + cos^{-1}x = \\frac{pi}{2}. int\\frac{dx}{\\sqrt{a^2-x^2}} = sin^{-1}\\frac{x}{a}, and int\\frac{dx}{a^2+x^2} = \\frac{1}{a}tan^{-1}\\frac{x}{a}."},
+   ["sin^{-1}x","[-1, 1]","[-\\frac{pi}{2}, \\frac{pi}{2}]","*\\frac{1}{\\sqrt{1-x^2}}"],
+   ["cos^{-1}x","[-1, 1]","[0, pi]","*\\frac{-1}{\\sqrt{1-x^2}}"],
+   ["tan^{-1}x","all real x","(-\\frac{pi}{2}, \\frac{pi}{2})","*\\frac{1}{1+x^2}"]],
+ note:"The DERIVATIVES are printed; the domains and ranges are not, and the ranges are what every 'why is the answer not x?' question turns on. sin^{-1}x + cos^{-1}x = \\frac{pi}{2}. The two matching integrals are printed: int\\frac{dx}{\\sqrt{a^2-x^2}} = sin^{-1}\\frac{x}{a}, and int\\frac{a dx}{a^2+x^2} = tan^{-1}\\frac{x}{a}."},
 
 {id:"ref-identities",tier:"ME",icon:"🔁",title:"Further trigonometric identities",
  blurb:"Compound angles, double angles, t-formulae and auxiliary angle.",
  cols:["Identity","Expansion"],
  rows:[
-   ["sin(A+-B)","sin A cos B +- cos A sin B"],
-   ["cos(A+-B)","cos A cos B -+ sin A sin B"],
-   ["tan(A+-B)","\\frac{tan A +- tan B}{1 -+ tan A tan B}"],
+   ["*sin(A+-B)","sin A cos B +- cos A sin B"],
+   ["*cos(A+-B)","cos A cos B -+ sin A sin B"],
+   ["*tan(A+-B)","\\frac{tan A +- tan B}{1 -+ tan A tan B}"],
    ["sin 2A","2 sin A cos A"],
    ["cos 2A","cos^2 A - sin^2 A = 2cos^2 A - 1 = 1 - 2sin^2 A"],
    ["tan 2A","\\frac{2tan A}{1 - tan^2 A}"],
-   ["sin x (t-formula)","\\frac{2t}{1+t^2}, t = tan\\frac{x}{2}"],
-   ["cos x (t-formula)","\\frac{1-t^2}{1+t^2}"],
-   ["tan x (t-formula)","\\frac{2t}{1-t^2}"],
+   ["*sin x (t-formula)","\\frac{2t}{1+t^2}, t = tan\\frac{x}{2}"],
+   ["*cos x (t-formula)","\\frac{1-t^2}{1+t^2}"],
+   ["*tan x (t-formula)","\\frac{2t}{1-t^2}"],
+   ["*sin A cos B","\\frac{1}{2}[sin(A+B) + sin(A-B)]"],
+   ["*cos A cos B","\\frac{1}{2}[cos(A-B) + cos(A+B)]"],
    ["a sin x + b cos x","Rsin(x+alpha), R = \\sqrt{a^2+b^2}, tan alpha = \\frac{b}{a}"],
-   ["sin^2 x","\\frac{1 - cos 2x}{2}"],
-   ["cos^2 x","\\frac{1 + cos 2x}{2}"]],
- note:"The last two are not identities you memorise for their own sake — they are how you integrate sin^2 and cos^2."},
+   ["*sin^2 x","\\frac{1 - cos 2x}{2}"],
+   ["*cos^2 x","\\frac{1 + cos 2x}{2}"],
+   ["*cos^2 A + sin^2 A","1"]],
+ note:"The double-angle rows are not printed as such — but they are the printed compound-angle formulas with B = A, so derive them rather than memorising them. The squared forms ARE printed, and they are how you integrate sin^2 and cos^2. The auxiliary angle is not printed."},
 
 {id:"ref-comb",tier:"ME",icon:"🎲",title:"Combinatorics",
  blurb:"Counting, the binomial theorem and Pascal's triangle.",
  cols:["Quantity","Formula"],
  rows:[
-   ["Permutations","nPr(n,r) = \\frac{n!}{(n-r)!}"],
-   ["Combinations","nCr(n,r) = \\frac{n!}{r!(n-r)!}"],
+   ["*Permutations","nPr(n,r) = \\frac{n!}{(n-r)!}"],
+   ["*Combinations","nCr(n,r) = \\frac{n!}{r!(n-r)!}"],
    ["Symmetry","nCr(n,r) = nCr(n,n-r)"],
    ["Pascal's identity","nCr(n,k) = nCr(n-1,k-1) + nCr(n-1,k)"],
    ["Circular arrangements","(n-1)!"],
    ["With repeated items","\\frac{n!}{p!q!...}"],
-   ["Binomial theorem","(a+b)^n = Sum nCr(n,k)a^{n-k}b^{k}"],
-   ["Sum of coefficients","Sum nCr(n,k) = 2^n"]],
- note:"Pigeonhole: n+1 objects in n containers force at least one container to hold two."},
+   ["*Binomial theorem","(x+a)^n = x^n + nCr(n,1)x^{n-1}a + ... + a^n"],
+   ["Sum of coefficients","\\sum nCr(n,k) = 2^n"],
+   ["*Binomial probability","P(X=r) = nCr(n,r)p^{r}(1-p)^{n-r}"]],
+ note:"Only the four marked rows are printed. Pigeonhole: n+1 objects in n containers force at least one container to hold two — also not printed, also examinable."},
 
 {id:"ref-vectors",tier:"ME",icon:"➡️",title:"Vectors and projectiles",
  blurb:"Components, the dot product, projection and projectile motion.",
  cols:["Quantity","Formula"],
  rows:[
-   ["Magnitude","|\\vec{u}| = \\sqrt{x^2+y^2}"],
+   ["*Magnitude","|\\vec{u}| = \\sqrt{x^2+y^2}"],
    ["Unit vector","\\hat{u} = \\frac{\\vec{u}}{|\\vec{u}|}"],
-   ["Dot product (components)","u_1v_1 + u_2v_2"],
-   ["Dot product (angle)","|\\vec{u}||\\vec{v}|cos theta"],
+   ["*Dot product (components)","u_1v_1 + u_2v_2"],
+   ["*Dot product (angle)","|\\vec{u}||\\vec{v}|cos theta"],
+   ["*Vector line","\\vec{r} = \\vec{a} + lambda\\vec{b}"],
    ["Perpendicular test","\\vec{u} \\cdot \\vec{v} = 0"],
    ["Scalar projection","\\frac{\\vec{u} \\cdot \\vec{v}}{|\\vec{v}|}"],
    ["Vector projection","\\frac{\\vec{u} \\cdot \\vec{v}}{|\\vec{v}|^2}\\vec{v}"],
@@ -208,7 +232,7 @@ MQ.DATA.reference = [
    ["Time of flight","\\frac{2V sin theta}{g}"],
    ["Range","\\frac{V^2 sin 2theta}{g}"],
    ["Maximum height","\\frac{V^2 sin^2 theta}{2g}"]],
- note:"Horizontal velocity is constant throughout; only the vertical component is affected by gravity."},
+ note:"NOTHING about projectiles is printed — you are expected to derive it from \\ddot{x} = 0 and \\ddot{y} = -g by integrating twice, and the range formula only holds for launch and landing at the same height. The projections are not printed either, and they are asked most years. Horizontal velocity is constant throughout."},
 
 {id:"ref-polynomials",tier:"ME",icon:"🧮",title:"Polynomials",
  blurb:"Remainder, factor, roots and coefficients.",
@@ -218,14 +242,14 @@ MQ.DATA.reference = [
    ["Factor theorem","(x-a) is a factor exactly when P(a) = 0"],
    ["Double root","P(a) = 0 and P'(a) = 0"],
    ["Quadratic: sum, product","-\\frac{b}{a}, \\frac{c}{a}"],
-   ["Cubic: sum of roots","-\\frac{b}{a}"],
-   ["Cubic: sum of pairs","\\frac{c}{a}"],
-   ["Cubic: product of roots","-\\frac{d}{a}"],
+   ["*Cubic: sum of roots","-\\frac{b}{a}"],
+   ["*Cubic: sum of pairs","\\frac{c}{a}"],
+   ["*Cubic: product of roots","-\\frac{d}{a}"],
    ["Quartic: product of roots","\\frac{e}{a}"]],
- note:"The signs alternate: the product of the roots is (-1)^n times the constant over the leading coefficient."},
+ note:"Only the cubic relations are printed. The signs alternate: the product of the roots is (-1)^n times the constant over the leading coefficient."},
 
 {id:"ref-induction",tier:"ME",icon:"🪜",title:"Proof by induction",
- blurb:"The template, and what each part is actually for.",
+ blurb:"The template, and what each part is actually for. Not printed anywhere.",
  cols:["Step","What to write"],
  rows:[
    ["1. Base case","Verify the statement for the smallest n. Show BOTH sides."],
@@ -239,9 +263,9 @@ MQ.DATA.reference = [
  blurb:"Bernoulli trials, probabilities and the normal approximation.",
  cols:["Quantity","Formula"],
  rows:[
-   ["P(X = k)","nCr(n,k)p^{k}(1-p)^{n-k}"],
-   ["Mean","mu = np"],
-   ["Variance","sigma^2 = np(1-p)"],
+   ["*P(X = k)","nCr(n,k)p^{k}(1-p)^{n-k}"],
+   ["*Mean","mu = np"],
+   ["*Variance","sigma^2 = np(1-p)"],
    ["Standard deviation","\\sqrt{np(1-p)}"],
    ["Sample proportion mean","p"],
    ["Sample proportion variance","\\frac{p(1-p)}{n}"],
@@ -255,6 +279,11 @@ MQ.Reference = (function () {
   const all = () => (cached || (cached = MQ.DATA.reference.filter(r => MQ.DATA.TIERS.indexOf(r.tier) >= 0)));
   const byId = id => all().find(r => r.id === id);
 
+  /** Is this row printed on the NESA reference sheet? */
+  const isNesa = row => /^\*/.test(String(row[0] || ""));
+  /** The row's cells with the marker stripped — always render through this. */
+  const cells = row => row.map((c, i) => (i === 0 ? String(c).replace(/^\*/, "") : c));
+
   /** Plain-text search across titles, blurbs and every cell. */
   function search(term) {
     const t = String(term || "").trim().toLowerCase();
@@ -262,10 +291,10 @@ MQ.Reference = (function () {
     return all().filter(sheet => {
       const hay = [sheet.title, sheet.blurb, sheet.note || ""]
         .concat(sheet.cols)
-        .concat(sheet.rows.map(r => r.join(" ")))
+        .concat(sheet.rows.map(r => cells(r).join(" ")))
         .join(" ").toLowerCase();
       return hay.includes(t);
     });
   }
-  return { all, byId, search };
+  return { all, byId, search, isNesa, cells };
 })();

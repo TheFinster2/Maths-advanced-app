@@ -63,6 +63,16 @@ MQ.U = (function () {
      here, and the whole app is one XSS hole if it is reversed.
      ══════════════════════════════════════════════════════════════ */
 
+  /* These are used for PLAIN TEXT only — see mathText() at the bottom.
+     They are deliberately NOT used when rendering to HTML. The renderer used
+     to swap single-character indices for their Unicode equivalents (x^2 → x²)
+     and fall back to <sup> for anything longer (x^{10} → x<sup>10</sup>), and
+     the two do not line up: the Unicode forms come from whichever fallback
+     font on the device happens to carry ⁻ ⁿ ᵢ, at that font's own size and
+     baseline. Put sin^{-1}x next to sin^2 x — which the inverse-trig sheet
+     does — and one index visibly floats above the other. Everything goes
+     through <sup>/<sub> now, so every index in the app shares one font, one
+     size and one baseline. */
   const SUP_CHARS = { "0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹",
                       "+":"⁺","-":"⁻","n":"ⁿ","i":"ⁱ" };
   const SUB_CHARS = { "0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉",
@@ -93,7 +103,12 @@ MQ.U = (function () {
     ne:"≠", le:"≤", ge:"≥", approx:"≈", propto:"∝", therefore:"∴", because:"∵",
     forall:"∀", exists:"∃", elem:"∈", notelem:"∉", subset:"⊂", union:"∪", inter:"∩",
     emptyset:"∅", nat:"ℕ", ints:"ℤ", rats:"ℚ", reals:"ℝ", implies:"⇒", iff:"⇔",
-    to:"→", mapsto:"↦", ldots:"…", cdots:"⋯", perp:"⊥", parallel:"∥", angle:"∠"
+    to:"→", mapsto:"↦", ldots:"…", cdots:"⋯", perp:"⊥", parallel:"∥", angle:"∠",
+    lnot:"¬",
+    /* Spacing. A formula line reads as one run-on string without it, and the
+       formula sheet sets several results side by side on one line. Em spaces,
+       not ordinary ones, which collapse in HTML. */
+    quad:"\u2003", qquad:"\u2003\u2003"
   });
   const WORD_RE = new RegExp("^(" +
     Object.keys(BARE_WORDS).filter(k => k !== "nCr" && k !== "nPr")
@@ -147,26 +162,27 @@ MQ.U = (function () {
     return null;
   }
 
-  function supHtml(inner) {
-    if (inner.length === 1 && SUP_CHARS[inner]) return SUP_CHARS[inner];
-    return "<sup>" + inner + "</sup>";
-  }
-  function subHtml(inner) {
-    if (inner.length === 1 && SUB_CHARS[inner]) return SUB_CHARS[inner];
-    return "<sub>" + inner + "</sub>";
-  }
+  const supHtml = inner => "<sup>" + inner + "</sup>";
+  const subHtml = inner => "<sub>" + inner + "</sub>";
 
   /* Commands taking brace arguments. `fn` receives already-rendered strings. */
   const CMDS = {
     frac:  { args: 2, fn: (a, b) => fracHtml(a, b) },
     dfrac: { args: 2, fn: (a, b) => fracHtml(a, b, "frac-lg") },
     tfrac: { args: 2, fn: (a, b) => fracHtml(a, b, "frac-sm") },
-    binom: { args: 2, fn: (a, b) => '<span class="binom">(<span class="stack">' +
-             '<span>' + a + '</span><span>' + b + '</span></span>)</span>' },
+    /* The brackets are wrapped rather than left as bare text so CSS can stretch
+       them to the height of the stack. A literal "(" next to a two-line stack
+       sits against the top row and reads as a misplaced symbol. */
+    binom: { args: 2, fn: (a, b) => '<span class="binom"><span class="pren">(</span><span class="stack">' +
+             '<span>' + a + '</span><span>' + b + '</span></span><span class="pren">)</span></span>' },
     vec:   { args: 1, fn: a => '<span class="vec">' + a + "</span>" },
     bar:   { args: 1, fn: a => '<span class="over">' + a + "</span>" },
     overline: { args: 1, fn: a => '<span class="over">' + a + "</span>" },
     hat:   { args: 1, fn: a => '<span class="hat">' + a + "</span>" },
+    /* Newton's dots. Extension 1 states projectile motion as \ddot{x} = 0 and
+       \ddot{y} = -g, and the whole derivation is unreadable without them. */
+    dot:   { args: 1, fn: a => '<span class="dot1">' + a + "</span>" },
+    ddot:  { args: 1, fn: a => '<span class="dot2">' + a + "</span>" },
     abs:   { args: 1, fn: a => "|" + a + "|" },
     norm:  { args: 1, fn: a => "‖" + a + "‖" },
     text:  { args: 1, fn: a => '<span class="mtext">' + a + "</span>" },
@@ -294,10 +310,24 @@ MQ.U = (function () {
   /** Render into a fresh <span>. Use where you want a node rather than a string. */
   const mathEl = (str, cls) => el("span", { class: cls || "math", html: math(str) });
 
-  /** Strip the mini-language to readable plain text — for aria-labels and tests. */
+  /** Strip the mini-language to readable plain text — for aria-labels and tests.
+      Indices come back as Unicode here (x² rather than "x2"), because in a
+      plain string that is the only way to tell an index from a coefficient.
+      Nothing about alignment matters in a text node, so the trade that made
+      the HTML path drop these characters does not apply. */
   function mathText(str) {
     const div = document.createElement("div");
     div.innerHTML = math(str);
+    const nodes = div.querySelectorAll ? div.querySelectorAll("sup,sub") : [];
+    Array.prototype.forEach.call(nodes, node => {
+      const map = node.tagName === "SUP" ? SUP_CHARS : SUB_CHARS;
+      let out = "";
+      for (const ch of node.textContent) {
+        if (!map[ch]) return;                 // no clean equivalent — leave it
+        out += map[ch];
+      }
+      if (out) node.textContent = out;
+    });
     return div.textContent;
   }
 

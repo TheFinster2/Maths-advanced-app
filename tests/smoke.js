@@ -23,7 +23,7 @@ const PORT = 8821;
 
     /* ── every top-level screen ── */
     R.section("Screens");
-    const screens = ["/home", "/play", "/study", "/reference", "/progress",
+    const screens = ["/home", "/play", "/study", "/reference", "/formulas", "/progress",
                      "/shop", "/achievements", "/settings", "/arcade"];
     for (const route of screens) {
       await H.goTo(page, route);
@@ -190,6 +190,128 @@ const PORT = 8821;
       await H.dismissModal(page, 200);
     }
     R.ok(true, "no horizontal overflow on any screen at 360 px");
+
+    /* ── the toolbelt: formula sheet + working-out pad ──
+       Checked at 360 px, because that is the width where a bottom sheet either
+       works or covers the whole question. */
+    R.section("Toolbelt");
+    await H.goTo(page, "/game/drill/MA-C2");
+    await page.waitForTimeout(300);
+
+    const fabs = await page.$$(".tb-fab-btn");
+    R.ok(fabs.length === 2, "both toolbelt buttons are mounted inside a game", fabs.length + " found");
+
+    /* The navbar is nearly full width on a phone, so a bottom-right button is
+       one bad number away from sitting on top of it. Measure rather than trust
+       the arithmetic in the stylesheet. */
+    const clearance = await page.evaluate(() => {
+      const fab = document.querySelector(".tb-fab");
+      const nav = document.getElementById("navbar");
+      if (!fab || !nav) return null;
+      const f = fab.getBoundingClientRect(), n = nav.getBoundingClientRect();
+      const overlapsX = f.left < n.right && f.right > n.left;
+      return { gap: Math.round(n.top - f.bottom), overlapsX };
+    });
+    R.ok(clearance && clearance.gap >= 6,
+      "the toolbelt buttons clear the navbar at 360 px",
+      clearance ? `${clearance.gap} px gap (overlapping horizontally: ${clearance.overlapsX})` : "not found");
+
+    if (fabs.length === 2) {
+      await fabs[0].click();
+      await page.waitForTimeout(300);
+      R.ok(await page.evaluate(() => !!document.querySelector(".tb-sheet")),
+        "the formula sheet opens over the game");
+      R.ok(await page.evaluate(() => document.querySelectorAll(".tb-row").length > 20),
+        "it lists formulas");
+      R.ok(await page.evaluate(() => document.querySelectorAll(".nesa-badge.yes").length > 0 &&
+                                     document.querySelectorAll(".nesa-badge.no").length > 0),
+        "both NESA states are labelled");
+      await H.assertNoOverflow(page, "toolbelt formulas @360");
+
+      /* An on-sheet formula is visible without paying anything; an off-sheet
+         one is behind a reveal. That asymmetry IS the feature. */
+      R.ok(await page.evaluate(() =>
+        !!document.querySelector(".tb-row.is-sheet .tb-tex") &&
+        !document.querySelector(".tb-row.is-sheet .tb-reveal")),
+        "printed formulas are shown outright");
+      R.ok(await page.evaluate(() => !!document.querySelector(".tb-row.is-learn .tb-reveal")),
+        "memorise-only formulas are behind a reveal");
+
+      R.ok(await page.evaluate(() => window.MQ.Toolbelt.penalty() === 1),
+        "nothing is charged before you reveal one");
+      await page.click(".tb-row.is-learn .tb-reveal");
+      await page.waitForTimeout(200);
+      R.ok(await page.evaluate(() => window.MQ.Toolbelt.penalty() < 1 && window.MQ.Toolbelt.lookups() === 1),
+        "revealing one charges the run");
+      R.ok(await page.evaluate(() => window.MQ.UI.formulaPenalty() === window.MQ.Toolbelt.penalty()),
+        "the reward pipeline sees the same number");
+
+      /* The crutch LATCHES: closing the sheet must not refund it. */
+      await page.click(".tb-close");
+      await page.waitForTimeout(250);
+      R.ok(await page.evaluate(() => !document.querySelector(".tb-sheet")), "the sheet closes");
+      R.ok(await page.evaluate(() => window.MQ.Toolbelt.penalty() < 1),
+        "closing the sheet does not refund the crutch");
+
+      /* Working-out pad. */
+      await page.click(".tb-fab-btn:nth-child(2)");
+      await page.waitForTimeout(300);
+      R.ok(await page.evaluate(() => !!document.querySelector(".tb-canvas")),
+        "the working-out pad opens");
+      const drew = await page.evaluate(async () => {
+        const c = document.querySelector(".tb-canvas");
+        const r = c.getBoundingClientRect();
+        const ev = (type, x, y) => c.dispatchEvent(new PointerEvent(type, {
+          clientX: r.left + x, clientY: r.top + y, bubbles: true, pointerId: 1
+        }));
+        ev("pointerdown", 20, 20);
+        for (let i = 1; i <= 12; i++) ev("pointermove", 20 + i * 8, 20 + i * 5);
+        ev("pointerup", 116, 80);
+        await new Promise(res => setTimeout(res, 80));
+        const px = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+        for (let i = 3; i < px.length; i += 4) if (px[i] > 0) return true;
+        return false;
+      });
+      R.ok(drew, "you can draw on it");
+      R.ok(await page.evaluate(() => {
+        const t = document.querySelector(".tb-notes");
+        t.value = "let u = x^2 + 1";
+        t.dispatchEvent(new Event("input", { bubbles: true }));
+        return window.MQ.State.data.scratch === "let u = x^2 + 1";
+      }), "typed working is saved");
+      await H.assertNoOverflow(page, "toolbelt working @360");
+      await page.click(".tb-close");
+      await page.waitForTimeout(200);
+    }
+
+    /* Leaving the game must take the toolbelt with it. */
+    await H.goTo(page, "/home");
+    await page.waitForTimeout(300);
+    R.ok(await page.evaluate(() => !document.querySelector(".tb-fab")),
+      "the toolbelt is torn down when you leave the game");
+    R.ok(await page.evaluate(() => window.MQ.Toolbelt.penalty() === 1),
+      "and the crutch latch resets for the next run");
+
+    /* ── the standalone formula sheet is free ── */
+    await H.goTo(page, "/formulas");
+    await page.waitForTimeout(300);
+    R.ok(await page.evaluate(() => !document.querySelector(".tb-reveal")),
+      "outside a run nothing is hidden behind a reveal");
+
+    /* ── text size ── */
+    R.section("Text size");
+    const sizes = await page.evaluate(() => {
+      const out = [];
+      for (const key of ["md", "lg", "xl"]) {
+        document.documentElement.dataset.text = key;
+        const p = document.querySelector(".view p");
+        out.push(parseFloat(getComputedStyle(p).fontSize));
+      }
+      document.documentElement.dataset.text = "md";
+      return out;
+    });
+    R.ok(sizes[1] > sizes[0] && sizes[2] > sizes[1],
+      "each text size step actually gets bigger", sizes.join(" → ") + " px");
 
     /* ── the console must be clean ── */
     R.section("Console");
