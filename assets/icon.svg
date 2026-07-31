@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MathQuest">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#39d6c8"/>
+      <stop offset="1" stop-color="#7c5cff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0a0f1c"/>
+  <g stroke="#ffffff" stroke-opacity=".08" stroke-width="2">
+    <path d="M96 0v512M192 0v512M288 0v512M384 0v512M0 96h512M0 192h512M0 288h512M0 384h512"/>
+  </g>
+  <path d="M132 400c0-96 40-152 72-188 24-27 44-42 44-70 0-22-15-34-34-34-22 0-36 14-42 34"
+        fill="none" stroke="url(#g)" stroke-width="30" stroke-linecap="round"/>
+  <path d="M380 112c0 96-40 152-72 188-24 27-44 42-44 70 0 22 15 34 34 34 22 0 36-14 42-34"
+        fill="none" stroke="url(#g)" stroke-width="30" stroke-linecap="round" opacity=".55"/>
+  <circle cx="256" cy="256" r="18" fill="#39d6c8"/>
+</svg>
