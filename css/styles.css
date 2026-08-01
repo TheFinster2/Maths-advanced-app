@@ -146,27 +146,59 @@ body::after{ /* graph paper */
    ============================================================ */
 .math{ line-height:1.75; }
 
+/* ── vertical alignment, and the one number that matters ──────
+   Every stacked construct below is positioned against the MATHS AXIS: the
+   height of the centre of a "+" or "−", which is where TeX puts a fraction
+   bar and where the eye expects one. Measured on this font stack it is
+   +0.344 em above the text baseline.
+
+   These were all wrong, in the same direction, by roughly an em. A column
+   inline-flex box takes its baseline from its FIRST item — the numerator —
+   so `vertical-align:-0.46em` was pushing an already-low anchor lower still,
+   and the bar ended up 0.68 em BELOW the baseline instead of 0.34 em above
+   it. The whole fraction hung off the bottom of the line.
+
+   The values are empirical because they depend on the font's descent and on
+   the line-heights set just below, neither of which CSS exposes. That is
+   exactly why `tests/align.js` measures the rendered result rather than
+   trusting the arithmetic: change any of this and the test will tell you
+   where things actually landed. */
+
 .frac{
   display:inline-flex; flex-direction:column; align-items:center;
-  vertical-align:-0.46em; margin:0 .14em; font-size:.93em;
+  vertical-align:0.645em;      /* puts the BAR on the maths axis */
+  margin:0 .14em; font-size:.93em;
   min-width:0;                 /* flex children default to min-width:auto */
 }
 .frac > .fnum{ padding:0 .28em; line-height:1.15; }
 .frac > .fden{ padding:0 .28em; line-height:1.15; border-top:1.4px solid currentColor; }
-.frac.frac-lg{ font-size:1em; vertical-align:-0.52em; }
-.frac.frac-sm{ font-size:.8em; vertical-align:-0.4em; }
+.frac.frac-lg{ font-size:1em; vertical-align:0.618em; }
+.frac.frac-sm{ font-size:.8em; vertical-align:0.796em; }
+/* A fraction in the NUMERATOR is the one case CSS cannot get right on its own.
+   The container's baseline comes from its first item, so a taller numerator
+   drags the whole fraction — bar included — downwards. A fraction in the
+   denominator is harmless for the same reason: it never touches the anchor.
+
+   :has() lets us pay the correction only where it is owed. Unsupported
+   browsers fall back to the rule above, which is where this started. Depth 2
+   drifts again; there is exactly one nested-numerator fraction in the whole
+   content bank, so that is a fair place to stop. */
+.frac:has(> .fnum .frac){ vertical-align:1.236em; }
 
 .sqrt{ white-space:nowrap; }
 .sqrt > .rad{ border-top:1.4px solid currentColor; padding:0 .18em 0 .1em; margin-left:-.06em; }
 sup.nthroot{ font-size:.6em; margin-right:-.35em; position:relative; top:-.35em; }
 
-.bigop{ display:inline-flex; align-items:center; vertical-align:-0.34em; margin:0 .12em; }
+/* The operator glyph centres on the maths axis, same as a fraction bar. */
+.bigop{ display:inline-flex; align-items:center; vertical-align:-0.066em; margin:0 .12em; }
 .bigop > .bop{ font-size:1.45em; line-height:.9; }
 .bigop > .blims{ display:inline-flex; flex-direction:column; justify-content:center;
   font-size:.6em; line-height:1.12; text-align:left; padding-left:.12em; }
 
+/* "lim" is a WORD: it sits on the text baseline like any other word, with
+   its subscript hanging below. It was riding 0.43 em low. */
 .limop{ display:inline-flex; flex-direction:column; align-items:center;
-  vertical-align:-0.42em; margin:0 .16em; }
+  vertical-align:0.012em; margin:0 .16em; }
 .limop > .lword{ line-height:1.05; }
 .limop > .llo{ font-size:.62em; line-height:1.05; }
 
@@ -183,7 +215,7 @@ sup.nthroot{ font-size:.6em; margin-right:-.35em; position:relative; top:-.35em;
 .mtext{ font-style:normal; }
 .bb{ font-weight:700; letter-spacing:.5px; }
 
-.binom{ display:inline-flex; align-items:center; vertical-align:-0.42em; }
+.binom{ display:inline-flex; align-items:center; vertical-align:0.03em; }
 .binom > .stack{ display:inline-flex; flex-direction:column; align-items:center;
   font-size:.78em; line-height:1.12; padding:0 .12em; }
 /* Bare "(" next to a two-line stack sits against the top row and reads as a

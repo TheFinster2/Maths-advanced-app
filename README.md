@@ -184,6 +184,7 @@ thing stopping the toggle from rotting.
 ```bash
 node tests/validate.js     # 137 checks — content, no browser needed, run this constantly
 node tests/smoke.js        #  65 checks — every screen and mode, zero console errors
+node tests/align.js        #  15 checks — where the maths actually lands on the line
 node tests/exploit.js      #  30 checks — the farming bot AND the honest player
 node tests/arcade.js       #  27 checks — the arcade provably earns nothing
 node tests/offline.js      #  32 checks — subpath, offline, and PWA update handling
@@ -197,6 +198,26 @@ npm install --no-save playwright-core
 
 Chromium is expected at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`;
 change `EXECUTABLE` in `tests/harness.js` if yours lives elsewhere.
+
+### Why there is an alignment test
+
+`tests/align.js` measures where every stacked construct lands relative to the
+**maths axis** — the height of the centre of a `+`, which is where TeX puts a
+fraction bar and where the eye expects one.
+
+It exists because all of them were wrong, in the same direction, by about an
+em, and nothing caught it. A column inline-flex box takes its baseline from its
+*first* item, so a fraction's anchor is the **numerator's** baseline; the
+stylesheet then pushed it further down with `vertical-align:-0.46em`, and the
+bar ended up 0.68 em *below* the text baseline instead of 0.34 em above it. The
+whole fraction hung off the bottom of the line. "Looks a bit off" is not
+something a test suite catches — unless it measures.
+
+The `vertical-align` lengths in `styles.css` cannot be derived: they depend on
+the font's descent and on the line-heights the stylesheet sets, neither of
+which CSS exposes. They are measured values. If you change the font stack, the
+line-heights, or the renderer's markup, run this test — it will tell you where
+things actually landed rather than where you hoped.
 
 ### `BREAK` mode
 
