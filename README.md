@@ -22,7 +22,7 @@ Built from `MATHS-BRIEF-ADVANCED-EXT1.md` and its addendum, using
 | **124 formulas** | Flat, searchable, and each one labelled with whether NESA prints it on the exam reference sheet |
 | **17 reference sheets** | The long-form tables, with the same labelling per row |
 | **13 game modes + 6 bosses + 3 arcade games** | |
-| **A toolbelt in every mode** | The formula sheet and a working-out pad, without leaving the question |
+| **A toolbelt in every mode** | Scientific calculator, formula sheet and a working-out pad, without leaving the question |
 
 ### Game modes
 
@@ -94,6 +94,36 @@ behind a **Tap to reveal**, and revealing one drops the run to **80% XP** —
 priced like every other crutch in the app, and it **latches**: closing the
 sheet does not refund it. That asymmetry is the whole design. Outside a run,
 on `#/formulas`, everything is free and nothing is hidden.
+
+**🧮 Calculator** opens a scientific calculator: DEG/RAD, `2nd` layer for the
+inverse trig and the `eˣ`/`10ˣ`/`∛`/`nPr` alternates, factorial, `nCr`, `Ans`,
+memory, and a **→ Answer** key that drops the result straight into the answer
+box. Free, no latch — NESA hands you a calculator too. It evaluates through
+`MQ.Expr`, the same recursive-descent parser that marks free-response algebra;
+nothing here goes near `eval()`.
+
+> **It cannot raise the soft keyboard.** This is the design constraint the
+> whole file is built around, because the obvious implementation fails on a
+> phone: an `<input>` showing the expression takes focus, the keyboard slides
+> up over the bottom of the screen, and the keypad you were pressing is
+> underneath it. Blurring after the fact just fights the platform.
+>
+> So there is **no input element anywhere in the calculator**. The display is a
+> `<div>` rendering a token list the calculator owns. On top of that: every key
+> calls `preventDefault()` on `pointerdown` so a press never moves focus at
+> all; opening the calculator blurs whatever was focused, dropping the keyboard
+> if it was already up; and **→ Answer** writes to the answer field *without*
+> focusing it. `tests/calc.js` asserts all four — Playwright cannot see a soft
+> keyboard, but it can see focus, and focus is what summons one.
+
+**Seeing the question while you calculate** is handled twice over, because it
+should not depend on how tall your phone is. The calculator's sheet is short
+(72vh cap, against 88vh for the formula sheet), the page gains bottom padding
+equal to the sheet height so the question card can physically scroll clear of
+it, and the card is scrolled up under the top bar when the sheet opens. On top
+of that the calculator carries a **mirrored copy of the question** pinned above
+the keypad, cloned from the live DOM so it works in every mode without each
+mode having to publish its question text.
 
 **✏️ Working** opens a scribble canvas and a notes field. Draw with a finger
 or a stylus, undo, four pen colours, three widths; or type. It is free and
@@ -185,6 +215,7 @@ thing stopping the toggle from rotting.
 node tests/validate.js     # 137 checks — content, no browser needed, run this constantly
 node tests/smoke.js        #  65 checks — every screen and mode, zero console errors
 node tests/align.js        #  15 checks — where the maths actually lands on the line
+node tests/calc.js         #  31 checks — the calculator, and that it never raises a keyboard
 node tests/exploit.js      #  30 checks — the farming bot AND the honest player
 node tests/arcade.js       #  27 checks — the arcade provably earns nothing
 node tests/offline.js      #  32 checks — subpath, offline, and PWA update handling

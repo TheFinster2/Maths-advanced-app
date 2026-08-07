@@ -22,6 +22,18 @@ MQ.Expr = (function () {
     asin: Math.asin, acos: Math.acos, atan: Math.atan,
     arcsin: Math.asin, arccos: Math.acos, arctan: Math.atan,
     sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh,
+    /* Degree-mode trig, for the calculator's DEG switch. A calculator cannot
+       do degrees by post-processing a radian answer — the conversion has to
+       happen at the argument, inside whatever expression the student is
+       building — so the switch inserts these names instead of the radian ones.
+       Harmless everywhere else: nothing generates them, and a student who
+       types sind(30) somewhere else gets the answer they meant. */
+    sind: x => Math.sin((x * Math.PI) / 180),
+    cosd: x => Math.cos((x * Math.PI) / 180),
+    tand: x => Math.tan((x * Math.PI) / 180),
+    asind: x => (Math.asin(x) * 180) / Math.PI,
+    acosd: x => (Math.acos(x) * 180) / Math.PI,
+    atand: x => (Math.atan(x) * 180) / Math.PI,
     ln: Math.log, log: Math.log10, lg: Math.log10, log10: Math.log10, log2: Math.log2,
     exp: Math.exp, sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs,
     floor: Math.floor, ceil: Math.ceil, round: Math.round, sign: Math.sign

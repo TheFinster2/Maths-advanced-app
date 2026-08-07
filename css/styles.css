@@ -715,6 +715,80 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); height:26px;
   border:1px solid var(--line); background:var(--card); color:var(--ink-dim); font-size:15px; }
 .tb-body{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
   padding:12px 0 4px; }
+
+/* The calculator is used WHILE reading the question, so its sheet is short and
+   the page gets padding to match — see reserveSpace() in toolbelt.js. Without
+   the padding the page has no room below the question and the card physically
+   cannot scroll clear of the sheet. */
+.tb-sheet[data-tab="calc"]{ max-height:min(72vh,620px); }
+:root[data-sheet="on"] .view{ padding-bottom:calc(var(--sheet-h,0px) + 28px); }
+
+/* the mirrored question */
+.tb-qmirror{
+  flex:none; margin:8px 0 2px; padding:9px 12px; border-radius:13px;
+  background:var(--card-2); border:1px solid var(--line);
+  max-height:22vh; overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.tb-qmirror-lbl{ font-size:10px; font-weight:800; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--ink-faint); margin-bottom:4px; }
+.tb-qmirror-body{ font-size:14px; line-height:1.8; color:var(--ink); }
+
+/* ---------- the calculator ----------
+   Note what is NOT here: any styling for an <input>. There is no input in the
+   calculator, by design — see the header of js/core/calc.js. A focusable text
+   field is what raises the soft keyboard over the keypad on a phone. */
+.calc{ display:grid; gap:10px; }
+.calc-display{
+  border-radius:14px; border:1px solid var(--line); background:var(--bg-0);
+  padding:10px 13px; min-height:74px; display:grid; align-content:center; gap:4px;
+}
+.calc-display-top{ display:flex; align-items:center; gap:8px; }
+.calc-expr{
+  flex:1; min-width:0; overflow-x:auto; white-space:nowrap; text-align:right;
+  font-family:"Cascadia Code",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:14px; color:var(--ink-dim); line-height:1.6;
+  scrollbar-width:none;
+}
+.calc-expr::-webkit-scrollbar{ display:none; }
+.calc-mode{
+  flex:none; font-size:10px; font-weight:800; letter-spacing:.6px; padding:2px 7px;
+  border-radius:99px; background:color-mix(in srgb,var(--accent) 20%,transparent);
+  color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 45%,transparent);
+}
+.calc-mode.rad{ background:color-mix(in srgb,var(--glow-b) 22%,transparent);
+  color:var(--glow-b); border-color:color-mix(in srgb,var(--glow-b) 45%,transparent); }
+.calc-result{
+  text-align:right; font-size:24px; font-weight:800; line-height:1.25;
+  font-variant-numeric:tabular-nums; overflow-x:auto; white-space:nowrap;
+  scrollbar-width:none;
+}
+.calc-result::-webkit-scrollbar{ display:none; }
+.calc-result.dim{ color:var(--ink-faint); font-weight:700; }
+.calc-result.bad{ color:var(--bad); font-size:14px; font-weight:700; }
+
+.calc-pad{ display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:5px; }
+.calc-key{
+  min-height:44px; padding:6px 2px; border-radius:12px; cursor:pointer;
+  border:1px solid var(--line); background:var(--card-2); color:var(--ink);
+  font:inherit; font-size:15px; font-weight:700; line-height:1.2;
+  display:grid; place-items:center; text-align:center;
+  transition:transform .1s, background .12s, border-color .12s;
+  -webkit-user-select:none; user-select:none; touch-action:manipulation;
+}
+.calc-key:active{ transform:scale(.94); background:var(--card); }
+.calc-key.fn{ font-size:13px; color:var(--ink-dim); background:var(--card); }
+.calc-key.op{ font-size:18px; color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.calc-key.warn{ font-size:13px; color:var(--warn);
+  background:color-mix(in srgb,var(--warn) 12%,transparent); }
+.calc-key.eq{ font-size:19px; color:var(--accent-ink); border-color:transparent;
+  background:linear-gradient(100deg,var(--glow-a),var(--glow-b)); }
+[data-theme="paper"] .calc-key.eq{ color:#fff; }
+.calc-key.accent{ background:color-mix(in srgb,var(--accent) 24%,transparent);
+  color:var(--accent); border-color:color-mix(in srgb,var(--accent) 50%,transparent); }
+.calc-key.send{ font-size:11.5px; font-weight:800; color:var(--good);
+  background:color-mix(in srgb,var(--good) 14%,transparent);
+  border-color:color-mix(in srgb,var(--good) 40%,transparent); }
 .tb-panel{ display:grid; gap:10px; }
 .tb-filters{ display:flex; gap:6px; flex-wrap:wrap; }
 .tb-filters .chip{ padding:7px 12px; font-size:12px; }

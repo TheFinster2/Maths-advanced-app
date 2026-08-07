@@ -1,6 +1,7 @@
-/* THE TOOLBELT — the two things you actually have on the desk in an exam,
+/* THE TOOLBELT — the things you actually have on the desk in an exam,
    available inside every game mode without leaving the question.
 
+     🧮  Calculator      — scientific, DEG/RAD, sends its result to the answer
      📄  Formula Sheet   — every formula, labelled with whether NESA prints it
      ✏️  Working         — a scribble pad and a notes field
 
@@ -16,7 +17,9 @@
    it. Anything else would make the flag decorative. The point of separating the
    two lists is to make you notice which half you are leaning on.
 
-   The scribble pad is free and always will be. Working out is not cheating.
+   The scribble pad and the calculator are free and always will be. Working out
+   is not cheating, and NESA hands you a calculator. See calc.js for why that
+   one has no <input> anywhere in it.
 
    ── teardown ───────────────────────────────────────────────────────────────
    The FAB and the sheet live OUTSIDE #view, because #view is emptied on every
@@ -74,15 +77,17 @@ MQ.Toolbelt = (function () {
     beginRun(opts);
     unmount();
 
+    /* Order is bottom-up: the calculator is the one you reach for most often
+       mid-question, so it sits closest to the thumb. */
+    const fab = (icon, label, tab) => U.el("button", {
+      class: "tb-fab-btn", "aria-label": label, title: label,
+      on: { click: () => open(tab) }
+    }, [U.el("span", { class: "tb-fab-ico", text: icon })]);
+
     fabEl = U.el("div", { class: "tb-fab" }, [
-      U.el("button", {
-        class: "tb-fab-btn", "aria-label": "Formula sheet", title: "Formula sheet",
-        on: { click: () => open("formulas") }
-      }, [U.el("span", { class: "tb-fab-ico", text: "📄" })]),
-      U.el("button", {
-        class: "tb-fab-btn", "aria-label": "Working out", title: "Working out",
-        on: { click: () => open("working") }
-      }, [U.el("span", { class: "tb-fab-ico", text: "✏️" })])
+      fab("📄", "Formula sheet", "formulas"),
+      fab("✏️", "Working out", "working"),
+      fab("🧮", "Calculator", "calc")
     ]);
     document.body.appendChild(fabEl);
     MQ.UI.onLeave(unmount);
@@ -103,6 +108,7 @@ MQ.Toolbelt = (function () {
     offSheetLooks = 0;
     revealed = new Set();
     strokes = [];
+    if (MQ.Calc) MQ.Calc.reset();
   }
 
   /* ── the sheet ─────────────────────────────────────────────── */
@@ -120,15 +126,29 @@ MQ.Toolbelt = (function () {
       b.dataset.tab = id;
       return b;
     };
-    const tFormulas = mk("formulas", "📄 Formulas");
-    const tWorking  = mk("working",  "✏️ Working");
-    tabs.appendChild(tFormulas);
-    tabs.appendChild(tWorking);
+    tabs.appendChild(mk("calc",     "🧮 Calculator"));
+    tabs.appendChild(mk("formulas", "📄 Formulas"));
+    tabs.appendChild(mk("working",  "✏️ Working"));
+
+    /* A mirror of the question, pinned inside the sheet. Reserving page space
+       below (see reserveSpace) already lets you scroll the real card clear of
+       the sheet — but on a short phone in landscape there may not BE enough
+       space, and "you can see the question" should not depend on how tall the
+       device is. So the calculator carries its own copy. */
+    const questionStrip = questionMirror();
 
     function setTab(id) {
       U.$$(".tb-tab", tabs).forEach(b => b.classList.toggle("on", b.dataset.tab === id));
       body.innerHTML = "";
-      body.appendChild(id === "working" ? workingPad() : formulaPanel({ scored }));
+      if (id === "calc") body.appendChild(MQ.Calc.panel());
+      else if (id === "working") body.appendChild(workingPad());
+      else body.appendChild(formulaPanel({ scored }));
+      /* The calculator gets a SHORT sheet, because it is the one tool you use
+         while reading the question rather than instead of reading it. The
+         formula sheet wants the height. */
+      sheetEl.querySelector(".tb-sheet").dataset.tab = id;
+      questionStrip.hidden = id !== "calc" || !questionStrip.dataset.has;
+      reserveSpace();
     }
 
     sheetEl = U.el("div", { class: "tb-sheet-root" }, [
@@ -139,11 +159,19 @@ MQ.Toolbelt = (function () {
           tabs,
           U.el("button", { class: "tb-close", text: "✕", "aria-label": "Close", on: { click: close } })
         ]),
+        questionStrip,
         body
       ])
     ]);
     document.body.appendChild(sheetEl);
-    setTab(tab === "working" ? "working" : "formulas");
+
+    /* If the answer box was focused, the soft keyboard is up and is about to
+       cover the sheet we just opened. Dismiss it. Every key in the sheet
+       calls preventDefault() on pointerdown, so nothing re-raises it. */
+    const active = document.activeElement;
+    if (active && /^(INPUT|TEXTAREA)$/.test(active.tagName)) active.blur();
+
+    setTab(["calc", "working", "formulas"].indexOf(tab) >= 0 ? tab : "formulas");
 
     escHandler = e => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", escHandler);
@@ -154,6 +182,73 @@ MQ.Toolbelt = (function () {
   function close() {
     if (escHandler) { document.removeEventListener("keydown", escHandler); escHandler = null; }
     if (sheetEl) { sheetEl.remove(); sheetEl = null; }
+    releaseSpace();
+  }
+
+  /* ── keeping the question visible ────────────────────────────
+     A bottom sheet covers the bottom of the page, and the question is usually
+     in the middle of it. Two things happen so it stays readable:
+
+       1. The page gets bottom padding equal to the sheet's height, so the
+          question can be SCROLLED clear of it — without that, the page simply
+          has no room below and the card cannot move.
+       2. The question card is scrolled to the top of the space that is left.
+
+     Both are undone on close, or the page keeps a dead strip at the bottom. */
+
+  /** The element showing the current question, whatever mode we are in. */
+  function questionEl() {
+    return U.$("#view .qtext") || U.$("#view .equiv-target") ||
+           U.$("#view .fq") || U.$("#view .qcard");
+  }
+
+  function reserveSpace() {
+    if (!sheetEl) return;
+    const sheet = sheetEl.querySelector(".tb-sheet");
+    const h = sheet ? sheet.getBoundingClientRect().height : 0;
+    document.documentElement.style.setProperty("--sheet-h", Math.round(h) + "px");
+    document.documentElement.dataset.sheet = "on";
+
+    const q = questionEl();
+    if (!q) return;
+    /* Put the question just below the top bar, which is the only part of the
+       viewport the sheet is guaranteed not to reach. */
+    const top = parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue("--topbar-h")) || 66;
+    const y = window.scrollY + q.getBoundingClientRect().top - top - 10;
+    window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+  }
+
+  function releaseSpace() {
+    document.documentElement.style.removeProperty("--sheet-h");
+    delete document.documentElement.dataset.sheet;
+  }
+
+  /**
+   * A copy of the question, shown above the calculator keypad.
+   *
+   * Cloned from the live DOM rather than read from a mode's state: every mode
+   * renders its question differently and there is no shared field for it, but
+   * they all put it on screen. The clone is already-rendered output from our
+   * own renderer, so there is nothing here that was not already trusted.
+   */
+  function questionMirror() {
+    const strip = U.el("div", { class: "tb-qmirror" });
+    const q = questionEl();
+    if (!q) {
+      strip.dataset.has = "";
+      strip.hidden = true;
+      return strip;
+    }
+    strip.dataset.has = "1";
+    strip.appendChild(U.el("div", { class: "tb-qmirror-lbl", text: "The question" }));
+    const body = U.el("div", { class: "tb-qmirror-body math" });
+    body.innerHTML = q.innerHTML;
+    /* Anything interactive in the clone would be a second, dead copy of a
+       control that already exists on the page. Strip it. */
+    U.$$("button, input, textarea, canvas", body).forEach(n => n.remove());
+    strip.appendChild(body);
+    return strip;
   }
 
   /* ── the formula panel ─────────────────────────────────────── */
@@ -415,5 +510,5 @@ MQ.Toolbelt = (function () {
   }
 
   return { mount, unmount, open, close, beginRun, formulaPanel, workingPad,
-           lookups, usedCrutch, penalty, CRUTCH };
+           questionMirror, lookups, usedCrutch, penalty, CRUTCH };
 })();

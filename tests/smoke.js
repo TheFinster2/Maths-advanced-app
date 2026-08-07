@@ -198,8 +198,11 @@ const PORT = 8821;
     await H.goTo(page, "/game/drill/MA-C2");
     await page.waitForTimeout(300);
 
+    /* Three tools: formula sheet, working-out pad, calculator. The calculator
+       has its own suite (tests/calc.js) — this only checks it is mounted. */
     const fabs = await page.$$(".tb-fab-btn");
-    R.ok(fabs.length === 2, "both toolbelt buttons are mounted inside a game", fabs.length + " found");
+    R.ok(fabs.length === 3, "all three toolbelt buttons are mounted inside a game",
+      fabs.length + " found");
 
     /* The navbar is nearly full width on a phone, so a bottom-right button is
        one bad number away from sitting on top of it. Measure rather than trust
@@ -216,7 +219,7 @@ const PORT = 8821;
       "the toolbelt buttons clear the navbar at 360 px",
       clearance ? `${clearance.gap} px gap (overlapping horizontally: ${clearance.overlapsX})` : "not found");
 
-    if (fabs.length === 2) {
+    if (fabs.length === 3) {
       await fabs[0].click();
       await page.waitForTimeout(300);
       R.ok(await page.evaluate(() => !!document.querySelector(".tb-sheet")),

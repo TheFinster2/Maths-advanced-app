@@ -10,7 +10,7 @@
    Note that switching syllabus tiers changes the file list, so that also has
    to bump the cache. */
 
-const CACHE = "mathquest-v1.1.0";
+const CACHE = "mathquest-v1.2.0";
 
 const PRECACHE = [
   "./",
@@ -32,6 +32,7 @@ const PRECACHE = [
   "js/core/bank.js",
   "js/core/ui.js",
   "js/core/arcade.js",
+  "js/core/calc.js",
   "js/core/toolbelt.js",
 
   "js/data/questions-ma-functions.js",
