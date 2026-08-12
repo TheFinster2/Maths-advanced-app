@@ -1101,6 +1101,7 @@ MQ.Gen = (function () {
   /** Generators this build ships, tier-filtered like Bank.all(). */
   let cached = null;
   const enabled = () => (cached || (cached = LIST.filter(g => MQ.DATA.tierEnabled(g.topic))));
+  MQ.DATA.onTierChange(() => { cached = null; });
 
   const byId = id => LIST.find(g => g.id === id);
 

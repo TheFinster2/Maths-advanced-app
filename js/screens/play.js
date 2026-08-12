@@ -141,6 +141,18 @@ MQ.Screens.play = (function () {
   function dispatch(view, args) {
     const id = args[0], arg = args[1];
 
+    /* A mode or topic belonging to a tier the player is not studying is still
+       REACHABLE by URL — from a bookmark, from the browser's back stack, or
+       just from having switched course mid-session. Bounce it here, once, so
+       every tier-gated mode does not have to remember its own guard. Vector
+       Lab already carried one; it now has a backstop rather than a duplicate.
+
+       Without this the Induction Builder draws from an empty proof pool and
+       renders a broken run rather than an honest redirect. */
+    const game = GAMES.find(g => g.id === id);
+    if (game && game.tier && MQ.DATA.TIERS.indexOf(game.tier) < 0) return UI.go("/play");
+    if (id === "drill" && arg && !MQ.DATA.tierEnabled(arg)) return UI.go("/game/drill");
+
     switch (id) {
       case "rapid":
         return MQ.Games.quiz.start(view, {

@@ -82,7 +82,9 @@
 <script src="js/core/audio.js"></script>
 <script src="js/core/fx.js"></script>
 
-<!-- ── the tier toggle, before anything that filters on it ────── -->
+<!-- ── the tier toggle, before anything that filters on it.
+     It also owns MQ.DATA.onTierChange(), which the data files below call at
+     load time, so it cannot move any later than this. ─────────── -->
 <script src="js/data/tiers.js"></script>
 
 <!-- ── core, part 2 ───────────────────────────────────────────── -->
@@ -101,8 +103,12 @@
 <script src="js/data/questions-ma-mixed.js"></script>
 
 <!-- ── content: Extension 1.
-     REMOVE these six lines (and their PRECACHE entries in sw.js) for an
-     Advanced-only build, and set MQ.DATA.TIERS = ["MA"] in tiers.js. ─────── -->
+     Shipping these does NOT force Extension 1 on anybody — the course is
+     picked in Settings at runtime, and an Advanced student never sees them.
+     REMOVE these five lines (and their PRECACHE entries in sw.js) only to cut
+     the download for a genuinely Advanced-only build, and then also set
+     MQ.DATA.BUILD_TIERS = ["MA"] in tiers.js so the app stops offering a
+     course it has no questions for. ─────────────────────────────── -->
 <script src="js/data/questions-me-functions.js"></script>
 <script src="js/data/questions-me-trig.js"></script>
 <script src="js/data/questions-me-calculus.js"></script>

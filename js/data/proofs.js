@@ -316,5 +316,6 @@ MQ.Proofs = (function () {
   const byId = id => all().find(p => p.id === id);
   const inductions = () => all().filter(p => p.kind === "induction");
   const general = () => all().filter(p => p.kind !== "induction");
+  MQ.DATA.onTierChange(() => { cached = null; });
   return { all, byId, inductions, general };
 })();

@@ -301,6 +301,108 @@ const PORT = 8821;
     R.ok(await page.evaluate(() => !document.querySelector(".tb-reveal")),
       "outside a run nothing is hidden behind a reveal");
 
+    /* ── the course toggle ──────────────────────────────────────
+       validate.js proves the data layer switches. This proves the SCREEN does:
+       that the Settings cards are wired up, and that the switch reaches the
+       parts of the app a student would actually notice it in. */
+    R.section("Course toggle");
+    await H.goTo(page, "/settings");
+    const courseCards = await page.evaluate(() =>
+      [...document.querySelectorAll(".game-card .game-name")].map(n => n.textContent));
+    R.ok(courseCards.includes("Advanced") && courseCards.includes("Advanced + Ext 1"),
+      "Settings offers both courses", courseCards.slice(0, 4).join(" / "));
+
+    /* The counts must describe each course, not the one currently active —
+       otherwise both cards advertise the same number. */
+    const counts = await page.evaluate(() => {
+      const D = window.MQ.DATA, B = window.MQ.Bank;
+      return D.COURSES.map(c =>
+        B.shipped().filter(q => c.tiers.indexOf(D.tierOf(q.topic)) >= 0).length);
+    });
+    R.ok(counts[0] > 0 && counts[1] > counts[0],
+      "each course advertises its own question count", counts.join(" vs "));
+
+    const beforeSwitch = await page.evaluate(() => ({
+      questions: window.MQ.Bank.all().length,
+      vectorLab: window.MQ.Screens.play.enabledGames().some(g => g.id === "vector"),
+      extTopics: window.MQ.Bank.topics().filter(t => t.tier === "ME").length
+    }));
+    R.ok(beforeSwitch.vectorLab && beforeSwitch.extTopics > 0,
+      "Extension content is present before switching");
+
+    /* Click the Advanced card exactly as a student would. */
+    await page.evaluate(() => {
+      const card = [...document.querySelectorAll(".game-card")]
+        .find(c => c.querySelector(".game-name") && c.querySelector(".game-name").textContent === "Advanced");
+      card.click();
+    });
+    await page.waitForTimeout(250);
+
+    const afterSwitch = await page.evaluate(() => ({
+      tiers: window.MQ.DATA.TIERS.join(","),
+      saved: window.MQ.State.data.settings.course,
+      questions: window.MQ.Bank.all().length,
+      extQuestions: window.MQ.Bank.all().filter(q => q.topic.startsWith("ME-")).length,
+      vectorLab: window.MQ.Screens.play.enabledGames().some(g => g.id === "vector"),
+      extTopics: window.MQ.Bank.topics().filter(t => t.tier === "ME").length,
+      extCards: window.MQ.Cards.all().filter(c => c.topic.startsWith("ME-")).length,
+      extAchs: window.MQ.DATA.enabledAchievements().filter(a => a.tier === "ME").length
+    }));
+    R.ok(afterSwitch.tiers === "MA", "clicking the card switches course", afterSwitch.tiers);
+    R.ok(afterSwitch.saved === "advanced", "and writes it to the save file", afterSwitch.saved);
+    R.ok(afterSwitch.extQuestions === 0, "Extension questions are gone");
+    R.ok(afterSwitch.extCards === 0 && afterSwitch.extAchs === 0,
+      "so are Extension flashcards and achievements");
+    R.ok(!afterSwitch.vectorLab, "Vector Lab hides itself");
+    R.ok(afterSwitch.extTopics === 0, "the topic picker loses its Extension section");
+    R.ok(afterSwitch.questions < beforeSwitch.questions && afterSwitch.questions > 0,
+      "the bank shrank but is not empty",
+      `${beforeSwitch.questions} → ${afterSwitch.questions}`);
+
+    /* Extension-only routes must not be reachable by URL once switched off —
+       a bookmarked /game/vector or /game/drill/ME-V1 is the obvious way to
+       land on a blank screen or a run drawn from an empty pool. */
+    for (const route of ["/game/vector", "/game/induction", "/game/drill/ME-V1"]) {
+      await H.goTo(page, route);
+      await page.waitForTimeout(300);
+      const stuck = await page.evaluate(r => location.hash === "#" + r, route);
+      R.ok(!stuck, `a bookmarked ${route} redirects instead of running empty`,
+        await page.evaluate(() => location.hash));
+      R.ok(await page.evaluate(() => document.getElementById("view").children.length > 0),
+        `${route} still leaves something on screen`);
+    }
+
+    /* The sixth boss is gated by its unlock chain rather than redirected, so
+       it must land on the locked state and not a half-built fight. */
+    await H.goTo(page, "/game/boss/inductor");
+    await page.waitForTimeout(300);
+    R.ok(await page.evaluate(() => !!document.querySelector(".empty")),
+      "the Extension boss shows its locked state rather than starting");
+
+    /* Every screen must still render on the narrower course. */
+    for (const route of ["/home", "/play", "/study", "/progress", "/achievements", "/reference"]) {
+      await H.goTo(page, route);
+      R.ok(await page.evaluate(() => document.getElementById("view").children.length > 0),
+        `${route} still renders on Advanced`);
+      await H.assertNoOverflow(page, route + " (Advanced) @390");
+    }
+
+    /* And back, so the rest of the run sees the full build. */
+    await H.goTo(page, "/settings");
+    await page.evaluate(() => {
+      const card = [...document.querySelectorAll(".game-card")]
+        .find(c => c.querySelector(".game-name") && c.querySelector(".game-name").textContent === "Advanced + Ext 1");
+      card.click();
+    });
+    await page.waitForTimeout(250);
+    const restored = await page.evaluate(() => ({
+      questions: window.MQ.Bank.all().length,
+      vectorLab: window.MQ.Screens.play.enabledGames().some(g => g.id === "vector")
+    }));
+    R.ok(restored.questions === beforeSwitch.questions && restored.vectorLab,
+      "switching back restores everything",
+      `${restored.questions} vs ${beforeSwitch.questions}`);
+
     /* ── text size ── */
     R.section("Text size");
     const sizes = await page.evaluate(() => {

@@ -39,8 +39,13 @@ MQ.State = (function () {
     achievements: {},
     history: {},
     scores: {},
+    /* `course` is the Advanced / Advanced + Extension 1 choice (see
+       js/data/tiers.js). null means "never chosen" — the app then runs the
+       widest course this build ships, and the first-run welcome asks. It is
+       stored as a course id rather than a tier array so that a save written
+       by a build with different tiers still restores to something valid. */
     settings: { sound: true, motion: true, volume: 0.8, difficulty: "standard", radians: true,
-                textScale: 1 },
+                textScale: 1, course: null },
     /* The Toolbelt's typed working-out. Capped at 4 kB by the writer — a save
        file that can grow without bound is a save file that eventually blows
        the localStorage quota and takes the rest of the progress with it. */
@@ -119,6 +124,33 @@ MQ.State = (function () {
   function difficulty() {
     const id = data.settings.difficulty || "standard";
     return MQ.DATA.difficulties.find(d => d.id === id) || MQ.DATA.difficulties[0];
+  }
+
+  /* ── syllabus course ─────────────────────────────────────────
+     `difficulty` is scoring; `course` is SYLLABUS. Two different knobs that
+     get confused constantly, which is why they live apart and say so in the
+     Settings copy. */
+
+  /** Apply the saved course to MQ.DATA.TIERS. Called once at boot. */
+  function applyCourse() {
+    if (data.settings.course) MQ.DATA.setCourse(data.settings.course);
+    // A null course means "never asked" — leave the build default in place.
+    // Re-read it, so a save naming a course this build no longer ships (or a
+    // build whose BUILD_TIERS shrank) settles on something that exists.
+    data.settings.course = MQ.DATA.course().id;
+    return data.settings.course;
+  }
+
+  /**
+   * Switch syllabus course and persist it. Returns true when it changed —
+   * every tier-filtered cache in the app has been dropped by then, so the
+   * caller only has to redraw.
+   */
+  function setCourse(id) {
+    const changed = MQ.DATA.setCourse(id);
+    data.settings.course = MQ.DATA.course().id;
+    if (changed) emit(); else save();
+    return changed;
   }
 
   /** Difficulty bonus compounded with the permanent ascension bonus (+12% each). */
@@ -543,6 +575,7 @@ MQ.State = (function () {
     get data() { return data; },
     xpNeeded, levelTitle, addXP, addCoins, spendCoins, MAX_LEVEL,
     difficulty, xpMultiplier, canPrestige, doPrestige, masteryTier,
+    applyCourse, setCourse,
     weekly, weeklyQuests, claimQuest, weekKey, QUEST_POOL,
     touchStreak, streakBonus,
     recordAnswer, noteStreak, bump, markMode, recordScore,

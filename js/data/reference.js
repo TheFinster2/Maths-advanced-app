@@ -296,5 +296,6 @@ MQ.Reference = (function () {
       return hay.includes(t);
     });
   }
+  MQ.DATA.onTierChange(() => { cached = null; });
   return { all, byId, search, isNesa, cells };
 })();

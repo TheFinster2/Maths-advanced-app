@@ -15,13 +15,19 @@ MQ.Bank = (function () {
 
   function all() {
     if (!ALL) {
-      const merged = [].concat.apply([], SOURCES.filter(Boolean));
       // The single point where the Advanced / Extension 1 toggle takes effect.
-      ALL = merged.filter(q => MQ.DATA.tierEnabled(q.topic));
+      ALL = shipped().filter(q => MQ.DATA.tierEnabled(q.topic));
       INDEX = new Map(ALL.map(q => [q.id, q]));
     }
     return ALL;
   }
+
+  /**
+   * Every question this BUILD ships, before the course filter. Only Settings
+   * uses it — to say how many questions each course would give you, which it
+   * cannot ask all() for without switching course to find out.
+   */
+  const shipped = () => [].concat.apply([], SOURCES.filter(Boolean));
 
   const byId = id => { all(); return INDEX.get(id); };
 
@@ -154,7 +160,11 @@ MQ.Bank = (function () {
     return seen.sort((a, b) => a.mastery - b.mastery)[0];
   }
 
-  return { register, all, byId, TOPICS, topics, topicName, topicFull, topicMeta, groupTopics,
+  /* The active tiers can change at runtime (Settings → Course), and ALL is
+     the app-wide cache of the filter. Drop it, and the id index with it. */
+  MQ.DATA.onTierChange(() => { ALL = null; INDEX = null; });
+
+  return { register, all, shipped, byId, TOPICS, topics, topicName, topicFull, topicMeta, groupTopics,
            filter, draw, shuffleChoices, mistakeQuestions, bookmarkedQuestions,
            statsByTopic, weakestTopic };
 })();

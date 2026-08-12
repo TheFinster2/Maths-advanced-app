@@ -177,5 +177,6 @@ MQ.Cards = (function () {
     return seen;
   }
   const inDeck = name => all().filter(c => c.deck === name);
+  MQ.DATA.onTierChange(() => { cached = null; });
   return { all, byId, decks, inDeck };
 })();

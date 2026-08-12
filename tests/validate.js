@@ -94,8 +94,11 @@ function makeContext(tiers) {
     "js/data/tiers.js"
   ].forEach(load);
 
-  // Override the tier array BEFORE the banks register, so both configurations
-  // can be validated in the same process.
+  // Override the tier arrays BEFORE the banks register, so both configurations
+  // can be validated in the same process. BUILD_TIERS as well as TIERS, or the
+  // context would model a full build merely switched to a narrower course
+  // rather than a genuinely Advanced-only build.
+  ctx.MQ.DATA.BUILD_TIERS = tiers.slice();
   ctx.MQ.DATA.TIERS = tiers.slice();
 
   ["js/core/state.js", "js/core/bank.js"].forEach(load);
@@ -131,7 +134,7 @@ const BREAKS = {
   "answer-first": ["js/data/generators.js",
     /item\.answer = g\.solve\(item\.params\);/, "item.answer = item.answer;"],
   "tier-filter": ["js/core/bank.js",
-    /ALL = merged\.filter\(q => MQ\.DATA\.tierEnabled\(q\.topic\)\);/, "ALL = merged;"],
+    /ALL = shipped\(\)\.filter\(q => MQ\.DATA\.tierEnabled\(q\.topic\)\);/, "ALL = shipped();"],
   "escape": ["js/core/util.js",
     /return render\(derivPrepass\(escapeHtml\(String\(str\)\)\)\);/, "return render(derivPrepass(String(str)));"],
   "domain": ["js/core/expr.js",
@@ -147,6 +150,10 @@ const BREAKS = {
   "nesa-flag": ["js/data/formulas.js",
     /\{id:"f-fv",\s+g:"series", tier:"MA", nesa:false,/,
     '{id:"f-fv", g:"series", tier:"MA", nesa:true,'],
+  /* The runtime course toggle's real failure mode: the tiers flip but a
+     memoised, tier-filtered list does not, so the app half-switches. */
+  "tier-cache": ["js/core/bank.js",
+    /MQ\.DATA\.onTierChange\(\(\) => \{ ALL = null; INDEX = null; \}\);/, ""],
   "minclean": ["js/core/expr.js",
     /if \(clean < minClean\) return \{ equal: false, reason: "undefined", clean \};/, ""]
 };
@@ -769,6 +776,137 @@ section("Tier toggle");
 
   ok(maQs.length >= 400, "the Advanced-only build still has ≥ 400 questions", `have ${maQs.length}`) &&
     pass("MA-only volume", `${maQs.length} questions`);
+}
+
+/* ── 11b. the RUNTIME course toggle ───────────────────────────
+   Section 11 proves each tier configuration is internally consistent when the
+   app BOOTS into it. This proves the app can be switched between them while
+   running, which is a different claim and a much easier one to get wrong: a
+   tier-filtered list that was memoised before the switch keeps serving the old
+   course forever. Every such cache registers with MQ.DATA.onTierChange(), and
+   the whole point of this section is to notice when one of them stops.
+
+   Run BREAK=tier-cache to confirm this section actually fails when the Bank's
+   registration is deleted. */
+section("Runtime course toggle");
+{
+  const ctxRt = makeContext(["MA", "ME"]);
+  const D = ctxRt.MQ.DATA;
+
+  const courses = D.availableCourses();
+  ok(courses.length === 2, "a full build offers both courses", courses.map(c => c.id).join(", "));
+  ok(D.course().id === "extension", "the default course is the widest the build ships");
+
+  /* Warm EVERY tier-filtered cache first. Switching before anything is
+     memoised would pass no matter how broken the invalidation is — which is
+     exactly how this bug ships. */
+  const before = {
+    questions: ctxRt.MQ.Bank.all().length,
+    topics:    ctxRt.MQ.Bank.topics().length,
+    cards:     ctxRt.MQ.Cards.all().length,
+    proofs:    ctxRt.MQ.Proofs.all().length,
+    gens:      ctxRt.MQ.Gen.enabled().length,
+    refs:      ctxRt.MQ.Reference.all().length,
+    formulas:  ctxRt.MQ.Formulas.all().length,
+    achs:      D.enabledAchievements().length
+  };
+
+  ok(D.setCourse("advanced") === true, "switching course reports that it changed");
+  ok(D.TIERS.join(",") === "MA", "the active tiers narrowed to Advanced", D.TIERS.join(","));
+  ok(D.hasExt() === false, "hasExt() follows the active course");
+
+  /* Each of these is a separately-registered cache. Listing them one by one
+     rather than in a loop means a failure names the file to go and fix. */
+  const leaks = [];
+  const check = (label, list, isExt) => {
+    const bad = list.filter(isExt);
+    if (bad.length) leaks.push(label + " (" + bad.length + ")");
+  };
+  check("Bank.all",      ctxRt.MQ.Bank.all(),         q => q.topic.startsWith("ME-"));
+  check("Bank.topics",   ctxRt.MQ.Bank.topics(),      t => t.tier === "ME");
+  check("Cards.all",     ctxRt.MQ.Cards.all(),        c => c.topic.startsWith("ME-"));
+  check("Proofs.all",    ctxRt.MQ.Proofs.all(),       p => p.topic.startsWith("ME-"));
+  check("Gen.enabled",   ctxRt.MQ.Gen.enabled(),      g => g.topic.startsWith("ME-"));
+  check("Reference.all", ctxRt.MQ.Reference.all(),    r => r.tier === "ME");
+  check("Formulas.all",  ctxRt.MQ.Formulas.all(),     f => f.tier === "ME");
+  check("enabledAchievements", D.enabledAchievements(), a => a.tier === "ME");
+  ok(leaks.length === 0,
+    "every tier-filtered cache drops Extension content when the course narrows",
+    leaks.join(", ") + " still serving stale, pre-switch results") &&
+    pass("all eight caches invalidate");
+
+  /* Bank.byId() rebuilds an INDEX alongside ALL. If the index is not dropped
+     with it, a starred ME- question keeps resolving on the Advanced course. */
+  const extId = (ctxRt.MQ.Bank.shipped().find(q => q.topic.startsWith("ME-")) || {}).id;
+  ok(!!extId && ctxRt.MQ.Bank.byId(extId) === undefined,
+    "Bank.byId() stops resolving Extension ids too (the id index is dropped with it)");
+
+  ok(ctxRt.MQ.Bank.shipped().length === before.questions,
+    "Bank.shipped() is NOT filtered — Settings needs the unswitched count",
+    `shipped ${ctxRt.MQ.Bank.shipped().length}, was serving ${before.questions}`);
+
+  /* And back. Restoring has to be exact: a cache rebuilt from a mutated source
+     array would come back short and nobody would ever notice. */
+  ok(D.setCourse("extension") === true, "switching back reports a change");
+  const after = {
+    questions: ctxRt.MQ.Bank.all().length,
+    topics:    ctxRt.MQ.Bank.topics().length,
+    cards:     ctxRt.MQ.Cards.all().length,
+    proofs:    ctxRt.MQ.Proofs.all().length,
+    gens:      ctxRt.MQ.Gen.enabled().length,
+    refs:      ctxRt.MQ.Reference.all().length,
+    formulas:  ctxRt.MQ.Formulas.all().length,
+    achs:      D.enabledAchievements().length
+  };
+  const drifted = Object.keys(before).filter(k => before[k] !== after[k]);
+  ok(drifted.length === 0, "switching back restores every bank exactly",
+    drifted.map(k => `${k}: ${before[k]} → ${after[k]}`).join(", ")) &&
+    pass("the toggle round-trips", `${before.questions} questions · ${before.cards} cards · ${before.gens} generators`);
+
+  ok(D.setCourse("extension") === false, "re-selecting the active course is a no-op");
+  ok(D.setCourse("nonsense") === false, "an unknown course id is refused");
+
+  /* The guards that stop a bad save file emptying the app. */
+  D.setTiers([]);
+  ok(D.TIERS.join(",") === "MA", "an empty selection falls back to Advanced, never to nothing",
+    D.TIERS.join(","));
+  D.setTiers(["ME", "MA", "XX"]);
+  ok(D.TIERS.join(",") === "MA,ME",
+    "unknown tiers are dropped and the order follows BUILD_TIERS", D.TIERS.join(","));
+
+  /* An Advanced-only BUILD must not be able to offer Extension at runtime —
+     it did not ship the question banks to back it. */
+  const ctxMa = makeContext(["MA"]);
+  ok(ctxMa.MQ.DATA.availableCourses().length === 1,
+    "an Advanced-only build offers no course toggle at all");
+  ok(ctxMa.MQ.DATA.setCourse("extension") === false &&
+     ctxMa.MQ.DATA.TIERS.join(",") === "MA",
+    "an Advanced-only build refuses to switch to Extension");
+  ctxMa.MQ.DATA.setTiers(["MA", "ME"]);
+  ok(ctxMa.MQ.DATA.TIERS.join(",") === "MA",
+    "setTiers() cannot exceed BUILD_TIERS either", ctxMa.MQ.DATA.TIERS.join(","));
+
+  /* The save round-trip: the course has to survive a reload, or the toggle
+     resets itself every time the app is opened. */
+  const ctxSave = makeContext(["MA", "ME"]);
+  ctxSave.MQ.State.load();
+  ctxSave.MQ.State.setCourse("advanced");
+  ok(ctxSave.MQ.State.data.settings.course === "advanced", "the course is written to the save file");
+  ctxSave.MQ.DATA.setCourse("extension");           // simulate a fresh boot's default
+  ctxSave.MQ.State.applyCourse();
+  ok(ctxSave.MQ.DATA.TIERS.join(",") === "MA",
+    "applyCourse() restores the saved course at boot", ctxSave.MQ.DATA.TIERS.join(","));
+
+  /* A save naming a course the build no longer ships must degrade, not wedge. */
+  const ctxStale = makeContext(["MA"]);
+  ctxStale.MQ.State.load();
+  ctxStale.MQ.State.data.settings.course = "extension";
+  ctxStale.MQ.State.applyCourse();
+  ok(ctxStale.MQ.DATA.TIERS.join(",") === "MA" &&
+     ctxStale.MQ.State.data.settings.course === "advanced",
+    "a save naming a course this build dropped is rewritten to one that exists",
+    ctxStale.MQ.State.data.settings.course) &&
+    pass("course survives a reload, and degrades safely");
 }
 
 /* ── 12. the precache list ────────────────────────────────────

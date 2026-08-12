@@ -184,17 +184,15 @@ wider than the phone" regressions.
 
 ## Advanced only, or Advanced + Extension 1
 
-One line, in `js/data/tiers.js`:
+**The student picks, in Settings → Course.** The choice is stored in the save
+file and applied at boot, and switching takes effect immediately — no reload,
+and it works offline, because both tiers are precached either way and simply
+filtered at runtime.
 
-```js
-MQ.DATA.TIERS = ["MA", "ME"];   // Advanced + Extension 1  (current)
-// MQ.DATA.TIERS = ["MA"];      // Advanced only
-```
-
-Every topic code is prefixed `MA-` or `ME-` and `Bank.all()` filters on this
-array, so flipping it is most of the change. For a clean Advanced-only build
-also remove the five `questions-me-*.js` lines from `index.html` and from
-`PRECACHE` in `sw.js`, and bump `CACHE`.
+The first-run welcome asks once, which is the point of the whole feature:
+defaulting an Advanced student into Extension content buries them in vectors
+and induction on day one, and they would have no reason to suspect a setting
+existed to turn it off.
 
 Extension 1 is **additive, not a difficulty ladder**. Advanced content is never
 gated behind Extension progress. What the toggle changes:
@@ -204,16 +202,53 @@ gated behind Extension progress. What the toggle changes:
 - Extension achievements, which are filtered out rather than shown as
   permanently unobtainable
 
-`tests/validate.js` asserts **both** configurations pass, which is the only
-thing stopping the toggle from rotting.
+Switching back to Advanced only **hides** Extension content. Nothing earned is
+deleted, and everything returns on switching again.
+
+### Two different arrays
+
+```js
+MQ.DATA.BUILD_TIERS = ["MA", "ME"];   // what this build SHIPS   — edit by hand
+MQ.DATA.TIERS       = ["MA"];         // what the player STUDIES — set in Settings
+```
+
+`TIERS` is always a subset of `BUILD_TIERS`, so an Advanced-only build can
+never offer a course it has no questions for; when only one course is
+available the toggle hides itself entirely. Every topic code is prefixed `MA-`
+or `ME-` and `Bank.all()` filters on `TIERS`, so that filter is still the one
+place the decision is enforced.
+
+To cut the download for a genuinely Advanced-only build, set
+`BUILD_TIERS = ["MA"]`, remove the five `questions-me-*.js` lines from
+`index.html` and from `PRECACHE` in `sw.js`, and bump `CACHE`.
+
+### If you add a tier-filtered cache, register it
+
+`TIERS` changes at runtime now, so every memoised, tier-filtered list has to be
+dropped when it does. They register next to the cache they own:
+
+```js
+let cached = null;
+MQ.DATA.onTierChange(() => { cached = null; });
+```
+
+Eight of them do (the question bank and its id index, flashcards, proofs,
+generators, reference sheets, formulas, achievements). Miss one and the toggle
+*half*-applies, which is worse than not applying at all — so
+`tests/validate.js` warms every cache, switches course, and asserts all eight
+flip. `BREAK=tier-cache` deletes the bank's registration and proves that check
+fails without it.
+
+`tests/validate.js` also still asserts **both** build configurations pass,
+which is the only thing stopping the toggle from rotting.
 
 ---
 
 ## Testing
 
 ```bash
-node tests/validate.js     # 137 checks — content, no browser needed, run this constantly
-node tests/smoke.js        #  65 checks — every screen and mode, zero console errors
+node tests/validate.js     # 160 checks — content, no browser needed, run this constantly
+node tests/smoke.js        #  89 checks — every screen and mode, zero console errors
 node tests/align.js        #  15 checks — where the maths actually lands on the line
 node tests/calc.js         #  31 checks — the calculator, and that it never raises a keyboard
 node tests/exploit.js      #  30 checks — the farming bot AND the honest player
@@ -260,12 +295,13 @@ BREAK=answer-first node tests/validate.js
 
 This deletes a specific guard with a regex, checks the patched file still
 parses, and then asserts the suite **fails**. A test that passes with its fix
-removed is worthless. Seven guards are covered:
+removed is worthless. Eight guards are covered:
 
 | `BREAK=` | The guard it deletes |
 |---|---|
 | `answer-first` | Generators derive the answer independently of `make()` |
 | `tier-filter` | The question bank filters on the tier toggle |
+| `tier-cache` | Switching course drops every memoised, tier-filtered list |
 | `escape` | The renderer escapes HTML *before* substituting |
 | `domain` | Equivalence checking respects a declared domain |
 | `minclean` | Equivalence requires enough defined sample points |

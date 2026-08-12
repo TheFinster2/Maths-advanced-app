@@ -120,6 +120,7 @@ MQ.DATA.achievements = [
 /** Achievements this build can actually award. */
 MQ.DATA.enabledAchievements = (function () {
   let cached = null;
+  MQ.DATA.onTierChange(() => { cached = null; });
   return () => (cached || (cached = MQ.DATA.achievements.filter(
     a => !a.tier || MQ.DATA.TIERS.indexOf(a.tier) >= 0)));
 })();

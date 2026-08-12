@@ -24,29 +24,42 @@ as an additive tier. If the student is doing Advanced only, you build strictly l
 never build something different.
 
 **Confirm with the user which they want before writing content.** Then implement the choice
-as a real toggle, not a fork:
+as a real toggle, not a fork — and make it the *student's* toggle, not a build flag, so one
+build serves both and nobody has to be told which download to take:
 
 ```js
 // js/data/tiers.js — the ONE place this decision lives.
-MQ.DATA.TIERS = ["MA"];          // Advanced only
-// MQ.DATA.TIERS = ["MA", "ME"]; // Advanced + Extension 1
+MQ.DATA.BUILD_TIERS = ["MA", "ME"];  // what the build SHIPS   — edited by hand
+MQ.DATA.TIERS       = ["MA"];        // what the player STUDIES — Settings → Course
 ```
 
-Every topic code is prefixed `MA-` or `ME-`. `Bank.all()` filters on `TIERS`, so flipping
-the array is the entire change. What that implies:
+`TIERS` is always a subset of `BUILD_TIERS`, chosen at runtime, stored in the save file and
+asked once on the first-run welcome. A build that ships one tier offers no toggle at all.
+Every topic code is prefixed `MA-` or `ME-`. `Bank.all()` filters on `TIERS`, so that filter
+is the entire change. What that implies:
 
 - **Question banks** live in separate files (`questions-ma-*.js`, `questions-me-*.js`). The
   `ME` files are simply not listed in `index.html`/`PRECACHE` for an Advanced-only build.
 - **Game modes are shared.** No mode is Extension-only — Ext 1 content flows through the
   same Proof Builder, Calculation Crunch and so on. The two exceptions are called out in §5
   (Vector Lab and Induction Builder), which should self-hide when `TIERS` excludes `ME`
-  rather than being separate screens.
+  rather than being separate screens, and redirect when reached by URL.
 - **The sixth boss** (§5) is Extension-only and hides the same way.
 - **Achievements** referencing Ext 1 topics must be filtered out too, or an Advanced-only
   player sees permanently unobtainable achievements — a small thing that feels awful.
+- **Every memoised, tier-filtered list must be invalidated when the tiers change.** This is
+  the whole cost of making the toggle a runtime one, and it is the failure mode to design
+  against: the tiers flip, one cached array does not, and the app half-switches — which is
+  worse than not switching at all. Have each cache register a reset next to itself
+  (`MQ.DATA.onTierChange(() => { cached = null; })`) rather than keeping a central list
+  that nobody remembers to add to.
+- **Tier-gated routes stay reachable by URL** after a switch — bookmarks, the back stack,
+  switching mid-session. Bounce them once in the route dispatcher; a mode drawing from a
+  now-empty pool renders a broken run instead of an honest redirect.
 - **The validator asserts both configurations pass**, so an Advanced-only build never
   references an `ME-` id it isn't shipping. Add this on day one; it costs ten lines and it
-  is the only thing that stops the toggle rotting.
+  is the only thing that stops the toggle rotting. Assert the *runtime* switch separately:
+  warm every cache, switch course, and check they all flipped.
 
 Build the Advanced tier completely first, in either case. Extension 1 is step 12.
 
@@ -169,7 +182,7 @@ Keep the chemistry question shape: `{ id, mod, topic, diff, q, choices, a, why }
 
 ### 4.2 Extension 1 — the additive tier (`ME-`)
 
-Only built when `TIERS` includes `"ME"` (§0).
+Shipped when `BUILD_TIERS` includes `"ME"`, and shown when the player's course does (§0).
 
 | Code | Topic | Sub-topics |
 |---|---|---|
@@ -570,8 +583,10 @@ earn nothing but bragging rights."*
    (§9.7) continuously.
 10. Shop, achievements, progress screen, daily/weekly, prestige.
 11. Bosses 1–5. PWA (manifest, service worker, icons) + `offline.js`.
-12. **Extension 1 tier** — `ME-` banks, Vector Lab, Induction Builder, the sixth boss. Verify
-    the Advanced-only build still passes every test with `TIERS = ["MA"]`.
+12. **Extension 1 tier** — `ME-` banks, Vector Lab, Induction Builder, the sixth boss, and the
+    Settings → Course toggle with its cache invalidation. Verify the Advanced-only build
+    still passes every test with `BUILD_TIERS = ["MA"]`, *and* that switching course at
+    runtime flips every tier-filtered cache.
 13. Arcade last — pure fun, and it can't break the economy if it never calls `award()`.
 
 Commit at each numbered step with the tests green. Don't batch.

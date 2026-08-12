@@ -434,6 +434,8 @@ MQ.Formulas = (function () {
     return cached;
   }
 
+  MQ.DATA.onTierChange(() => { cached = null; });
+
   const byId = id => all().find(f => f.id === id);
 
   /** Formulas printed on the NESA reference sheet. */

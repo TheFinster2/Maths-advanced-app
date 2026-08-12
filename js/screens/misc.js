@@ -11,7 +11,8 @@ MQ.Screens.achievements = function (view) {
   view.appendChild(U.el("h1", { text: "Achievements" }));
   view.appendChild(U.el("p", { html:
     `<b>${done.length}</b> of <b>${all.length}</b> unlocked. ` +
-    (MQ.DATA.hasExt() ? "" : "Extension 1 achievements are hidden on an Advanced-only build.") }));
+    (MQ.DATA.hasExt() ? ""
+      : "Extension 1 achievements are hidden while you are on the Advanced course.") }));
   view.appendChild(U.el("div", { class: "bar", style: "margin-bottom:16px" },
     [U.el("i", { style: `width:${U.pct(done.length, all.length)}%` })]));
 
@@ -53,6 +54,59 @@ MQ.Screens.settings = function (view) {
 
   view.appendChild(U.el("h1", { text: "Settings" }));
 
+  /* ── course ──────────────────────────────────────────────────
+     The syllabus toggle. First, because it is the setting that changes the
+     most about the app, and the one a student needs on day one.
+
+     Hidden entirely on a build that only shipped one course — a toggle with a
+     single option is just a confusing label. */
+  const courses = MQ.DATA.availableCourses();
+  if (courses.length > 1) {
+    view.appendChild(U.el("h2", {}, [
+      document.createTextNode("Course"),
+      U.el("span", { class: "h2-sub", text: "syllabus, not scoring" })
+    ]));
+    const courseGrid = U.el("div", { class: "grid g2" });
+    courses.forEach(c => {
+      const active = MQ.DATA.course().id === c.id;
+      courseGrid.appendChild(U.el("button", {
+        class: "game-card", style: "--gc:var(--glow-a)",
+        on: { click: () => switchCourse(c) }
+      }, [
+        U.el("div", { class: "game-ico", text: c.icon }),
+        U.el("div", { class: "game-name", text: c.name }),
+        U.el("div", { class: "game-desc", text: c.desc }),
+        U.el("div", { class: "game-foot" }, [
+          U.el("span", { class: "chip" + (active ? " on" : ""),
+            text: active ? "Studying this" : "Switch" }),
+          U.el("span", { class: "chip", text: countFor(c.tiers) + " questions" })
+        ])
+      ]));
+    });
+    view.appendChild(courseGrid);
+    view.appendChild(U.el("p", { class: "tiny muted", style: "margin-top:8px", text:
+      "Extension 1 is additive: it adds vectors, induction, combinatorics, inverse trig, a sixth " +
+      "Exam Boss and the Vector Lab on top of Advanced, and never gates any Advanced content " +
+      "behind it. Switching back to Advanced only HIDES that content — nothing you have already " +
+      "earned is deleted, and it all returns if you switch again." }));
+  }
+
+  /* Counts have to come from Bank.shipped(), NOT Bank.all(): all() is already
+     filtered to the course you are on, so the course you are not on would
+     always advertise itself as smaller than it is. */
+  function countFor(tiers) {
+    return MQ.Bank.shipped()
+      .filter(q => tiers.indexOf(MQ.DATA.tierOf(q.topic)) >= 0).length.toLocaleString();
+  }
+
+  function switchCourse(c) {
+    if (MQ.DATA.course().id === c.id) return;
+    if (!S.setCourse(c.id)) return;
+    MQ.Sound.equip();
+    UI.toast({ icon: c.icon, kind: "good", text: "Now studying " + c.sub + "." });
+    UI.handleRoute();
+  }
+
   /* difficulty */
   view.appendChild(U.el("h2", {}, [
     document.createTextNode("Difficulty"),
@@ -80,8 +134,8 @@ MQ.Screens.settings = function (view) {
   });
   view.appendChild(diffGrid);
   view.appendChild(U.el("p", { class: "tiny muted", style: "margin-top:8px", text:
-    "This changes how hard the SCORING is. It is separate from which syllabus tier this build ships — " +
-    "see the Build panel below." }));
+    "This changes how hard the SCORING is, not which syllabus you get. Which content you see is " +
+    "the Course setting above." }));
 
   /* text size */
   view.appendChild(U.el("h2", {}, [
@@ -153,7 +207,8 @@ MQ.Screens.settings = function (view) {
      problem is undiagnosable. */
   view.appendChild(U.el("h2", { text: "Build" }));
   view.appendChild(U.el("div", { class: "card" }, [
-    row("Syllabus tiers", MQ.DATA.TIERS.map(t => MQ.DATA.TIER_META[t].name).join(" + ")),
+    row("Course", MQ.DATA.course().sub),
+    row("Tiers shipped", MQ.DATA.BUILD_TIERS.map(t => MQ.DATA.TIER_META[t].name).join(" + ")),
     row("Questions", MQ.Bank.all().length.toLocaleString()),
     row("Flashcards", String(MQ.Cards.all().length)),
     row("Generators", String(MQ.Gen.enabled().length)),

@@ -7,10 +7,12 @@
    the version matches MQ.VERSION, so drift fails the build rather than
    silently stranding users on an old build.
 
-   Note that switching syllabus tiers changes the file list, so that also has
-   to bump the cache. */
+   Note that changing BUILD_TIERS in js/data/tiers.js changes the file list, so
+   that also has to bump the cache. Switching COURSE in Settings does not — the
+   Extension banks are precached either way and simply filtered out at runtime,
+   which is what makes the toggle instant and available offline. */
 
-const CACHE = "mathquest-v1.2.0";
+const CACHE = "mathquest-v1.3.0";
 
 const PRECACHE = [
   "./",
