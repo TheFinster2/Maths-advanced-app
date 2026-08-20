@@ -67,6 +67,7 @@ MQ.Games.boss = (function () {
     const maxHp = boss.hp;
     const maxPlayer = 100;
     let bossHp = maxHp, playerHp = maxPlayer;
+    const log = [];
     let asked = 0, hits = 0, finished = false, tookDamage = false, revived = false;
     let phase = 1;                          // The Inductor only
     let phaseAsked = 0, phaseHits = 0;
@@ -210,6 +211,14 @@ MQ.Games.boss = (function () {
       asked++;
       phaseAsked++;
       S.recordAnswer(question.topic, ok, question.id);
+      /* A timeout is not a wrong answer and must not read as one — the review
+         shows it as a blank, which is the mistake that actually happened. */
+      log.push({
+        ok, id: question.id, topic: question.topic, label: "Q" + (log.length + 1),
+        prompt: question.q,
+        yours: timedOut ? null : question.choices[chosen],
+        correct: question.choices[question.a], why: question.why
+      });
       const tooFast = performance.now() - shownAt < UI.MIN_READ_MS;
 
       if (ok && !tooFast) {
@@ -333,6 +342,7 @@ MQ.Games.boss = (function () {
           ["Your HP", Math.max(0, Math.round(playerHp))],
           revived ? ["Revived", "yes"] : ["Questions", asked]
         ],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

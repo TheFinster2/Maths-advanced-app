@@ -12,7 +12,7 @@
    Extension banks are precached either way and simply filtered out at runtime,
    which is what makes the toggle instant and available offline. */
 
-const CACHE = "mathquest-v1.3.0";
+const CACHE = "mathquest-v1.4.0";
 
 const PRECACHE = [
   "./",

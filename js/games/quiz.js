@@ -128,6 +128,10 @@ MQ.Games.quiz = (function () {
     if (c.totalTime) c.totalTime = Math.round(c.totalTime * diffMode.timeScale);
     MQ.Sound.gameStart();
 
+    /* Every answered question, for the post-run review. A quiz only ever shows
+       one question at a time, so once the run ends this log is the ONLY record
+       of what was asked — there is no marked-up screen to go back to. */
+    const log = [];
     let idx = 0, correct = 0, streak = 0, bestStreak = 0;
     let xpEarned = 0, coinsEarned = 0, lives = c.lives, doubled = false;
     let penalty = 0, shownAt = 0, rushed = 0, insightUsed = false;
@@ -193,6 +197,10 @@ MQ.Games.quiz = (function () {
     function answer(q, chosen, isCorrect, btn) {
       const fb = card.reveal(chosen);
       S.recordAnswer(q.topic, isCorrect, q.id);
+      log.push({
+        ok: isCorrect, id: q.id, topic: q.topic, label: "Q" + (log.length + 1),
+        prompt: q.q, yours: q.choices[chosen], correct: q.choices[q.a], why: q.why
+      });
 
       // Answering faster than a human could read the question earns nothing.
       const tooFast = performance.now() - shownAt < UI.MIN_READ_MS;
@@ -364,6 +372,7 @@ MQ.Games.quiz = (function () {
           ["Wrong", `−${penalty} XP`],
           insightUsed ? ["Insight", "used"] : (rushed ? ["Rushed", rushed] : ["Multiplier", "×" + multiplier()])
         ],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

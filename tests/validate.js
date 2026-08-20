@@ -909,6 +909,64 @@ section("Runtime course toggle");
     pass("course survives a reload, and degrades safely");
 }
 
+/* ── 11c. every run can be reviewed ───────────────────────────
+   smoke.js drives the review sheet in a browser, but it can only drive the
+   modes it walks. This is the cheap structural check that covers the rest and,
+   more to the point, covers the mode nobody has written yet: if you call
+   UI.results() you must also hand it something to review with.
+
+   A run that ends with no way back to what you got wrong is the whole defect
+   this feature exists to fix, and it is silent — the mode looks fine, it just
+   quietly throws the marking away. Static, because it is about the call site,
+   not about what happens at runtime. */
+section("Answer review");
+{
+  /** The object literal passed to the nth UI.results( in `src`. */
+  function resultsCalls(src) {
+    const out = [];
+    let from = 0;
+    for (;;) {
+      const at = src.indexOf("UI.results(", from);
+      if (at < 0) break;
+      const open = src.indexOf("{", at);
+      let depth = 0, i = open;
+      for (; i < src.length; i++) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}" && --depth === 0) break;
+      }
+      out.push(src.slice(open, i + 1));
+      from = i;
+    }
+    return out;
+  }
+
+  const files = fs.readdirSync(path.join(ROOT, "js/games")).map(f => "js/games/" + f)
+    .concat(["js/screens/study.js"]);
+  const missing = [];
+  let calls = 0;
+  files.forEach(rel => {
+    const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+    resultsCalls(src).forEach(body => {
+      calls++;
+      if (!/\breview:/.test(body) && !/\breviewScreen:/.test(body)) missing.push(rel);
+    });
+  });
+
+  ok(calls >= 10, "found the end-of-run summaries to check", calls + " UI.results() calls");
+  ok(missing.length === 0,
+    "every mode hands UI.results() a review — `review:` items, or `reviewScreen:` when its own screen is the review",
+    missing.join(", ") + " end a run with no way back to what you got wrong") &&
+    pass("every run can be reviewed", calls + " modes");
+
+  /* The results modal has to actually render what it is handed, or the check
+     above is asserting against a field nothing reads. */
+  const ui = fs.readFileSync(path.join(ROOT, "js/core/ui.js"), "utf8");
+  ok(/js-review\b/.test(ui) && /reviewSheet\(/.test(ui),
+    "the results modal renders the review button");
+  ok(/silent/.test(ui),
+    "reopening the results after a review does not re-fire the celebration");
+}
+
 /* ── 12. the precache list ────────────────────────────────────
    Shipping a change to a precached file without bumping CACHE means anyone
    already installed keeps serving the old code — the fix can never reach them. */

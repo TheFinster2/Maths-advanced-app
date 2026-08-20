@@ -127,6 +127,10 @@ MQ.Games.equiv = (function () {
     S.touchStreak();
     MQ.Sound.gameStart();
 
+    /* Written when the task closes. `yours` is what the student actually typed;
+       since more than one form is equivalent, `correct` is labelled as ONE
+       accepted answer rather than THE answer. */
+    const log = [];
     let idx = 0, solved = 0, firstTry = 0, attempts = 0, totalAttempts = 0;
     let xpEarned = 0, coinsEarned = 0, penalty = 0, shownAt = 0, finished = false;
     /* Latched the moment the live checker is first switched on. Never cleared. */
@@ -304,6 +308,14 @@ MQ.Games.equiv = (function () {
     function reveal(ok, gain) {
       submitBtn.disabled = true;
       input.disabled = true;
+      log.push({
+        ok: ok && attempts === 1, topic: task.topic, label: "Q" + (log.length + 1),
+        prompt: task.ask + "   " + task.show,
+        yours: input.value.trim() + (ok && attempts > 1
+          ? "  (" + U.ordinal(attempts) + " attempt)" : ""),
+        correct: task.accept,
+        why: task.why
+      });
       const fb = U.el("div", { class: "feedback " + (ok ? "ok" : "no") }, [
         U.el("div", { class: "math", html:
           `<b>${ok ? "Equivalent." : "One correct answer: "}</b>` +
@@ -349,6 +361,7 @@ MQ.Games.equiv = (function () {
           ["Attempts", totalAttempts],
           ["Live check", liveUsed ? "used" : "unused"]
         ],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

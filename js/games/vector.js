@@ -44,6 +44,7 @@ MQ.Games.vector = (function () {
     S.touchStreak();
     MQ.Sound.gameStart();
 
+    const log = [];
     let round = 0, hits = 0, exact = 0, finished = false;
     let xpEarned = 0, coinsEarned = 0, penalty = 0;
 
@@ -191,6 +192,16 @@ MQ.Games.vector = (function () {
                   : `Hit — landed at ${U.fmtNum(U.sigFig(landing,4))} m.`)
           : `Missed — landed at ${U.fmtNum(U.sigFig(landing,4))} m, target was ${spec.range} m.`;
 
+        /* Two scored things per round — the launch and the calculation — so
+           both get their own review entry rather than being averaged into one
+           that describes neither. */
+        log.push({
+          ok: hit, topic: "ME-V1", label: "Launch " + (round + 1),
+          prompt: `Land a projectile at ${spec.range} m.`,
+          yours: `${U.fmtNum(speed)} m/s at ${angle}° — landed at ${U.fmtNum(U.sigFig(landing, 4))} m`,
+          correct: `within range of ${spec.range} m`
+        });
+
         if (hit) { xpEarned += bull ? 34 : 22; coinsEarned += bull ? 7 : 4; }
         else penalty += 8;
         scoreChip.textContent = Math.max(0, xpEarned - penalty) + " XP";
@@ -236,6 +247,14 @@ MQ.Games.vector = (function () {
             MQ.Sound.wrong();
           }
           scoreChip.textContent = Math.max(0, xpEarned - penalty) + " XP";
+
+          log.push({
+            ok, topic: "ME-V1", label: "Calculation " + (round + 1),
+            prompt: `Launched at ${U.fmtNum(speed)} m/s and ${angle}°. Compute ${asked}. (g = 9.8)`,
+            yours: raw,
+            correct: U.fmtNum(U.sigFig(answer, 6)),
+            why: formula
+          });
 
           askWrap.appendChild(U.el("div", { class: "feedback " + (ok ? "ok" : "no") }, [
             U.el("div", { class: "math", html:
@@ -293,6 +312,7 @@ MQ.Games.vector = (function () {
         extraStats: [["Targets hit", hits + "/" + c.rounds],
                      ["Calculations", exact + "/" + c.rounds],
                      ["Wrong", "−" + penalty + " XP"]],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

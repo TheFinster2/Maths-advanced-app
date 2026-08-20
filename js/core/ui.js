@@ -306,10 +306,142 @@ MQ.UI = (function () {
     return { rank: "D", cls: "rank-d", blurb: "Rough run — try the flashcards for this topic." };
   }
 
+  /* ── the review sheet ───────────────────────────────────────────
+     crunch.js already carries the note "never cover the worked solution with
+     a results overlay" — the student reads the explanation, THEN moves on.
+     This is that same rule at the scale of a whole run: the results modal is
+     sticky, and its only exits were "Back to games" and "Play again", both of
+     which destroy the marked-up screen underneath. Fill in a table, submit,
+     and the one moment the app knows exactly what you got wrong is the moment
+     it covers it up and offers to throw it away.
+
+     Two ways back, because modes differ in where the truth lives:
+
+     · review — a per-item list the mode hands over. Works everywhere,
+       including the modes that only ever showed you one question at a time.
+     · reviewScreen — for a mode whose own screen IS the review (Table Panic
+       marks every cell and fills in the ones you missed). Closes the modal
+       and leaves a bar to get back, instead of rebuilding that board in a
+       list that would be strictly worse than the real thing. */
+
+  /**
+   * Post-run answer review. Entries:
+   *   { ok, prompt, yours, correct, why, label, topic, id }
+   * `yours` may be null for an item that was skipped or never reached.
+   */
+  function reviewSheet(list, opts) {
+    const o = opts || {};
+    const items = (list || []).filter(Boolean);
+    const wrong = items.filter(x => !x.ok).length;
+    let wrongOnly = false;
+
+    const box = U.el("div");
+    render();
+    modal(box, { sticky: true, wide: true });
+
+    function render() {
+      box.innerHTML = "";
+      const shown = wrongOnly ? items.filter(x => !x.ok) : items;
+
+      box.appendChild(U.el("h2", { text: o.title || "Review your answers" }));
+      box.appendChild(U.el("p", { class: "muted", style: "margin-top:-4px", text:
+        `${items.length - wrong} right · ${wrong} to look at` +
+        (o.note ? " · " + o.note : "") }));
+
+      /* Only worth offering when it would actually hide something. Getting
+         everything wrong makes the filter a no-op, and so does a short list. */
+      if (wrong && wrong < items.length && items.length > 4) {
+        box.appendChild(U.el("div", { class: "row", style: "margin-bottom:12px" }, [
+          U.el("button", { class: "btn btn-sm" + (wrongOnly ? "" : " btn-primary"), text: "All",
+            on: { click: () => { wrongOnly = false; render(); } } }),
+          U.el("button", { class: "btn btn-sm" + (wrongOnly ? " btn-primary" : ""),
+            text: "Only what I missed (" + wrong + ")",
+            on: { click: () => { wrongOnly = true; render(); } } })
+        ]));
+      }
+
+      shown.forEach(it => box.appendChild(reviewItem(it)));
+
+      box.appendChild(U.el("div", { class: "row", style: "margin-top:16px" }, [
+        o.onBack ? U.el("button", { class: "btn btn-ghost btn-sm", text: "← Results",
+          on: { click: () => { closeModal(); o.onBack(); } } }) : null,
+        U.el("div", { class: "spacer" }),
+        U.el("button", { class: "btn btn-primary", text: o.doneLabel || "Done",
+          on: { click: () => { closeModal(); if (o.onDone) o.onDone(); } } })
+      ]));
+    }
+  }
+
+  function reviewItem(it) {
+    /* Starring works from here as well as mid-run. Review is exactly when a
+       student knows which question they want to see again, and making them
+       replay the run to star it is how it never gets starred. */
+    let star = null;
+    if (it.id) {
+      const on0 = MQ.State.isBookmarked(it.id);
+      star = U.el("button", { class: "bookmark-btn" + (on0 ? " on" : ""), type: "button",
+        title: "Star this question for review", text: on0 ? "★" : "☆" });
+      star.addEventListener("click", () => {
+        const on = MQ.State.toggleBookmark(it.id);
+        star.classList.toggle("on", on);
+        star.textContent = on ? "★" : "☆";
+        MQ.Sound.tap();
+      });
+    }
+
+    const rows = [];
+    if (it.ok) {
+      rows.push(reviewRow("You", it.yours, "ok"));
+    } else {
+      // Blank reads as "you ran out of time", which is not the same mistake as
+      // an answer that was wrong, and should not look like one.
+      rows.push(reviewRow("You", it.yours === null || it.yours === undefined || it.yours === ""
+        ? "— left blank" : it.yours, "no"));
+      rows.push(reviewRow("Answer", it.correct, "ok"));
+    }
+
+    return U.el("div", { class: "rev-item " + (it.ok ? "ok" : "no") }, [
+      U.el("div", { class: "rev-head" }, [
+        U.el("span", { class: "rev-mark", text: it.ok ? "✓" : "✗" }),
+        it.label ? U.el("span", { class: "chip", text: it.label }) : null,
+        it.topic ? U.el("span", { class: "chip", text: MQ.Bank.topicName(it.topic) }) : null,
+        it.topic ? tierChip(it.topic) : null,
+        U.el("div", { class: "spacer" }),
+        star
+      ]),
+      it.prompt ? U.el("div", { class: "rev-q math", html: U.math(it.prompt) }) : null,
+      U.el("div", { class: "rev-rows" }, rows),
+      it.why ? U.el("div", { class: "rev-why math", html: U.math(it.why) }) : null
+    ]);
+  }
+
+  function reviewRow(label, value, cls) {
+    return U.el("div", { class: "rev-row " + cls }, [
+      U.el("span", { class: "rev-lbl", text: label }),
+      U.el("span", { class: "math rev-val", html: U.math(value) })
+    ]);
+  }
+
+  /* Closes the results modal and leaves the mode's own marked-up screen
+     visible, with one control to get the results back. Without that control
+     the student is stranded on a finished board with no obvious next step. */
+  function reviewOnScreen(reopen) {
+    closeModal();
+    const bar = U.el("div", { class: "review-bar" }, [
+      U.el("span", { class: "review-bar-txt", text: "Reviewing — ✓ right, ✗ wrong, blanks filled in" }),
+      U.el("button", { class: "btn btn-sm btn-primary", text: "Results",
+        on: { click: () => { bar.remove(); reopen(); } } })
+    ]);
+    document.body.appendChild(bar);
+    // Leaving the screen must take the bar with it, or it follows the student
+    // onto Home and floats over an unrelated page forever.
+    onLeave(() => bar.remove());
+  }
+
   /**
    * End-of-run summary modal.
    * opts: { title, correct, total, xp, coins, extraStats:[[label,value]],
-   *         newBest, onAgain, bonus }
+   *         newBest, onAgain, bonus, review, reviewScreen }
    */
   function results(opts) {
     const o = opts;
@@ -317,9 +449,11 @@ MQ.UI = (function () {
     const r = rank(acc, o.bonus);
     const perfect = o.total > 0 && o.correct === o.total;
 
-    if (perfect) { MQ.Sound.perfect(); MQ.FX.confetti(140); }
-    else if (acc >= 60) { MQ.Sound.win(); MQ.FX.confetti(70); }
-    else MQ.Sound.lose();
+    if (!o.silent) {
+      if (perfect) { MQ.Sound.perfect(); MQ.FX.confetti(140); }
+      else if (acc >= 60) { MQ.Sound.win(); MQ.FX.confetti(70); }
+      else MQ.Sound.lose();
+    }
 
     const cells = [
       ["Correct", `${o.correct}/${o.total}`],
@@ -331,6 +465,13 @@ MQ.UI = (function () {
        remembered to mention would be a crutch nobody notices paying for. */
     const looks = MQ.Toolbelt && MQ.Toolbelt.lookups ? MQ.Toolbelt.lookups() : 0;
     if (looks) cells.push(["Off-sheet lookups", looks + " · ×" + formulaPenalty()]);
+
+    /* Reopening has to rebuild from `o`, not reuse a node — the review sheet
+       and the on-screen bar both close this modal, and closeModal() empties
+       the root. Guard the celebration so coming back does not re-fire the
+       confetti and the fanfare every time. */
+    const again = () => results(Object.assign({}, o, { silent: true }));
+    const list = (o.review || []).filter(Boolean);
 
     modal(U.el("div", { class: "modal-center" }, [
       U.el("div", { class: "modal-big " + r.cls, text: r.rank }),
@@ -344,7 +485,24 @@ MQ.UI = (function () {
         ])
       )),
       o.coins ? U.el("p", { class: "muted", html: `Earned <b>${o.coins}</b> 🔢 Primes` }) : null,
-      U.el("div", { class: "row", style: "margin-top:8px" }, [
+
+      /* Above "Play again" deliberately. Both of the old exits threw the run
+         away, so the way back to it has to be the more prominent choice. */
+      list.length ? U.el("button", {
+        class: "btn btn-block js-review", style: "margin-top:4px",
+        text: "📋 Review your answers" + (o.correct < o.total ? ` (${o.total - o.correct} missed)` : ""),
+        on: { click: () => reviewSheet(list, {
+          title: o.title, onBack: again, onDone: again,
+          doneLabel: "Back to results"
+        }) }
+      }) : null,
+      o.reviewScreen ? U.el("button", {
+        class: "btn btn-block js-review-screen", style: "margin-top:8px",
+        text: "🔍 Look back at the board",
+        on: { click: () => reviewOnScreen(again) }
+      }) : null,
+
+      U.el("div", { class: "row", style: "margin-top:12px" }, [
         U.el("button", {
           class: "btn btn-ghost btn-sm", text: "Back to games",
           on: { click: () => { closeModal(); go("/play"); } }
@@ -388,6 +546,7 @@ MQ.UI = (function () {
   }
 
   return { route, go, init, handleRoute, syncHeader, applyTheme, toast, modal, closeModal,
-           confirmDialog, award, gameShell, results, rank, chip, tierChip, onLeave, pulse,
+           confirmDialog, award, gameShell, results, reviewSheet, reviewOnScreen,
+           rank, chip, tierChip, onLeave, pulse,
            formulaPenalty, MIN_BONUS_ACCURACY, MIN_READ_MS };
 })();

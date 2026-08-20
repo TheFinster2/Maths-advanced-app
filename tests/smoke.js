@@ -301,6 +301,135 @@ const PORT = 8821;
     R.ok(await page.evaluate(() => !document.querySelector(".tb-reveal")),
       "outside a run nothing is hidden behind a reveal");
 
+    /* ── reviewing answers after a run ──────────────────────────
+       The complaint this answers: you fill in a table, hit submit, the results
+       overlay covers the marked-up board, and its only exits both throw the
+       board away. So both routes back get driven here — the per-item sheet and
+       the step-aside — and the round-trip has to land on the results again. */
+    R.section("Answer review");
+
+    /* A quiz run: 15 questions, alternating right and wrong, so the sheet has
+       both states to render and the wrong-only filter has something to hide. */
+    await H.goTo(page, "/game/drill/MA-C2");
+    await page.waitForTimeout(300);
+    for (let i = 0; i < 15; i++) {
+      const label = await page.evaluate(n => {
+        const a = window.MQ.__current.answer;
+        const btns = [...document.querySelectorAll(".choice")].filter(b => !b.disabled);
+        if (!btns.length) return "done";
+        btns[n % 2 === 0 ? a : (a + 1) % btns.length].click();
+        const next = document.querySelector(".js-next");
+        if (!next) return "done";
+        next.click();
+        return next.textContent;
+      }, i);
+      await page.waitForTimeout(170);
+      if (String(label).includes("results") || label === "done") break;
+    }
+    await page.waitForTimeout(700);
+
+    R.ok(await page.evaluate(() => !!document.querySelector(".js-review")),
+      "the results screen offers a review of your answers");
+    R.ok(await page.evaluate(() =>
+      /\(\d+ missed\)/.test((document.querySelector(".js-review") || {}).textContent || "")),
+      "and says how many you missed",
+      await page.evaluate(() => (document.querySelector(".js-review") || {}).textContent));
+
+    await page.evaluate(() => document.querySelector(".js-review").click());
+    await page.waitForTimeout(250);
+    const sheet = await page.evaluate(() => ({
+      items: document.querySelectorAll(".rev-item").length,
+      ok: document.querySelectorAll(".rev-item.ok").length,
+      no: document.querySelectorAll(".rev-item.no").length,
+      why: document.querySelectorAll(".rev-why").length,
+      answers: document.querySelectorAll(".rev-item.no .rev-row.ok").length
+    }));
+    R.ok(sheet.items === 15, "every question in the run is listed", `${sheet.items} items`);
+    R.ok(sheet.ok > 0 && sheet.no > 0, "right and wrong are told apart",
+      `${sheet.ok} right / ${sheet.no} wrong`);
+    R.ok(sheet.answers === sheet.no, "every wrong answer shows the correct one next to yours",
+      `${sheet.answers} of ${sheet.no}`);
+    R.ok(sheet.why === sheet.items, "and every one keeps its explanation", `${sheet.why} explanations`);
+    await H.assertNoOverflow(page, "review sheet @390");
+
+    /* Starring from the review sheet — the moment a student actually knows
+       which question they want to see again. */
+    const starred = await page.evaluate(() => {
+      const before = window.MQ.State.data.bookmarks.length;
+      document.querySelector(".rev-item .bookmark-btn").click();
+      return window.MQ.State.data.bookmarks.length - before;
+    });
+    R.ok(starred === 1, "a question can be starred from the review sheet");
+
+    const filtered = await page.evaluate(() => {
+      const b = [...document.querySelectorAll("button")].find(x => /Only what I missed/.test(x.textContent));
+      if (!b) return null;
+      b.click();
+      return { shown: document.querySelectorAll(".rev-item").length,
+               anyRight: document.querySelectorAll(".rev-item.ok").length };
+    });
+    R.ok(filtered && filtered.shown === sheet.no && filtered.anyRight === 0,
+      "the wrong-only filter hides everything you got right", JSON.stringify(filtered));
+
+    /* Back to results, without re-firing the run-complete celebration. */
+    await page.evaluate(() => [...document.querySelectorAll("button")]
+      .find(b => /Back to results|Results/.test(b.textContent)).click());
+    await page.waitForTimeout(250);
+    R.ok(await page.evaluate(() => !!document.querySelector(".js-again")),
+      "the review sheet returns to the results screen");
+
+    /* Table Panic: the mode whose own board IS the review. */
+    await H.goTo(page, "/game/panic");
+    await page.waitForTimeout(400);
+    await page.evaluate(() => {
+      const want = window.MQ.__current.rows;
+      const norm = t => String(t).replace(/\s+/g, "");
+      [...document.querySelectorAll(".pcell")].forEach((cell, i) => {
+        cell.click();
+        const opts = [...document.querySelectorAll(".modal .choice")];
+        const probe = document.createElement("div");
+        probe.innerHTML = window.MQ.U.math(want[i]);
+        const right = opts.findIndex(o => norm(o.textContent) === norm(probe.textContent));
+        const pick = i % 2 === 0 ? right : opts.findIndex((o, k) => k !== right);
+        opts[pick >= 0 ? pick : 0].click();
+      });
+    });
+    await page.evaluate(() => [...document.querySelectorAll("button")]
+      .find(b => /Submit grid/.test(b.textContent)).click());
+    await page.waitForTimeout(600);
+
+    R.ok(await page.evaluate(() => document.querySelectorAll(".pcell.right").length > 0 &&
+                                   document.querySelectorAll(".pcell.wrongc").length > 0),
+      "Table Panic marks the grid right and wrong before the results open");
+    R.ok(await page.evaluate(() => !!document.querySelector(".js-review-screen")),
+      "and offers a way back to that grid");
+
+    await page.evaluate(() => document.querySelector(".js-review-screen").click());
+    await page.waitForTimeout(250);
+    const onScreen = await page.evaluate(() => ({
+      modalGone: document.getElementById("modal-root").hidden,
+      bar: !!document.querySelector(".review-bar"),
+      marked: document.querySelectorAll(".pcell.right, .pcell.wrongc").length
+    }));
+    R.ok(onScreen.modalGone && onScreen.marked > 0,
+      "the results step aside and the marked grid is readable again");
+    R.ok(onScreen.bar, "with a bar to get the results back");
+    await H.assertNoOverflow(page, "panic review @390");
+
+    await page.evaluate(() => document.querySelector(".review-bar button").click());
+    await page.waitForTimeout(250);
+    R.ok(await page.evaluate(() =>
+      !document.getElementById("modal-root").hidden && !document.querySelector(".review-bar")),
+      "and that bar restores the results and takes itself away");
+
+    /* The bar must not outlive the screen it belongs to. */
+    await page.evaluate(() => document.querySelector(".js-review-screen").click());
+    await page.waitForTimeout(200);
+    await H.goTo(page, "/home");
+    await page.waitForTimeout(250);
+    R.ok(await page.evaluate(() => !document.querySelector(".review-bar")),
+      "leaving the screen takes the review bar with it");
+
     /* ── the course toggle ──────────────────────────────────────
        validate.js proves the data layer switches. This proves the SCREEN does:
        that the Settings cards are wired up, and that the switch reaches the

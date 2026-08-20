@@ -293,6 +293,11 @@ MQ.Games.panic = (function () {
         coins: net * 2 + (perfect ? 30 : 0)
       });
 
+      /* The grid above is now fully marked — right cells green, wrong ones red,
+         and every blank filled in with its answer. That is a better review
+         than any list, so offer both: reviewScreen steps the modal aside to
+         show it, and `review` covers the case where the run ended by the
+         clock and the student is scrolled somewhere else entirely. */
       UI.results({
         title: reason === "Time!" ? "Out of time" : (perfect ? "Perfect grid" : "Grid submitted"),
         correct: right, total: rows.length, xp: got.xp, coins: got.coins, newBest,
@@ -301,6 +306,15 @@ MQ.Games.panic = (function () {
           ["Time left", U.fmtTime(Math.max(0, timeLeft))],
           ["Time bonus", timeBonus ? "+" + timeBonus : "none (<75%)"]
         ],
+        reviewScreen: true,
+        review: rows.map((row, i) => ({
+          ok: answers[i] === row[1],
+          label: table.cols[0] + " " + (i + 1),
+          topic: table.topic,
+          prompt: row[0],
+          yours: answers[i],
+          correct: row[1]
+        })),
         onAgain: () => UI.handleRoute()
       });
     }

@@ -25,6 +25,10 @@ MQ.Games.crunch = (function () {
     S.touchStreak();
     MQ.Sound.gameStart();
 
+    /* One entry per question, written when the question closes. `ok` is
+       FIRST-attempt correctness, matching how the run is scored — a question
+       you got on the fourth go is one to look at again, not a tick. */
+    const log = [];
     let idx = 0, correct = 0, firstTry = 0, attemptsThisQ = 0, totalAttempts = 0;
     let xpEarned = 0, coinsEarned = 0, penalty = 0, streak = 0, bestStreak = 0;
     let shownAt = 0, finished = false, item = null;
@@ -196,6 +200,14 @@ MQ.Games.crunch = (function () {
     function reveal(ok, gain) {
       submitBtn.disabled = true;
       input.disabled = true;
+      log.push({
+        ok: ok && attemptsThisQ === 1, topic: item.topic, label: "Q" + (log.length + 1),
+        prompt: item.prompt,
+        yours: input.value.trim() + (ok && attemptsThisQ > 1
+          ? "  (" + U.ordinal(attemptsThisQ) + " attempt)" : ""),
+        correct: U.fmtNum(U.sigFig(item.answer, 6)),
+        why: item.why
+      });
       const fb = U.el("div", { class: "feedback " + (ok ? "ok" : "no") }, [
         U.el("div", { class: "math", html:
           `<b>${ok ? "Correct." : "The answer was " + U.escapeHtml(U.fmtNum(U.sigFig(item.answer, 6))) + "."}</b> ` +
@@ -248,6 +260,7 @@ MQ.Games.crunch = (function () {
           ["Attempts", totalAttempts],
           ["Efficiency", Math.round(efficiency * 100) + "%"]
         ],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

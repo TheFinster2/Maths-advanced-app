@@ -12,6 +12,10 @@ MQ.Games.survival = (function () {
     const diffMode = S.difficulty();
     MQ.Sound.gameStart();
 
+    /* One life, so the run ends the instant you are wrong — and the question
+       that ended it is the one worth reading. It is on screen for 900 ms
+       before the results cover it. */
+    const log = [];
     let depth = 0, correct = 0, xpEarned = 0, coinsEarned = 0;
     let finished = false, shownAt = 0, card = null, question = null;
     let perQuestion = 30 * diffMode.timeScale;
@@ -72,6 +76,11 @@ MQ.Games.survival = (function () {
       clearInterval(timerId);
       card.reveal(chosen);
       S.recordAnswer(question.topic, ok, question.id);
+      log.push({
+        ok, id: question.id, topic: question.topic, label: "Depth " + (log.length + 1),
+        prompt: question.q, yours: question.choices[chosen],
+        correct: question.choices[question.a], why: question.why
+      });
 
       if (!ok) {
         MQ.Sound.wrong();
@@ -126,6 +135,7 @@ MQ.Games.survival = (function () {
           ["Best ever", S.data.stats.survivalBest],
           ["Final clock", Math.round(perQuestion) + "s"]
         ],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

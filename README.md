@@ -182,6 +182,35 @@ wider than the phone" regressions.
 
 ---
 
+## Reviewing your answers after a run
+
+Every run ends on a results screen, and every results screen has a way back to
+what you actually got right and wrong:
+
+- **📋 Review your answers** — a per-item sheet: the question, what you
+  answered, the correct answer when you missed it, and the worked explanation.
+  Filter to *only what I missed*, and star anything you want to see again
+  (starred questions become their own game mode).
+- **🔍 Look back at the board** — for Table Panic and Match Pairs, whose own
+  screen is already the review. The results modal steps aside, leaving the
+  marked grid readable, with a bar to bring the results back.
+
+This exists because the results overlay used to be a dead end. It is `sticky`,
+so its only exits were *Back to games* and *Play again* — and both destroy the
+screen underneath. Fill in a table, hit submit, and the one moment the app knew
+exactly which cells you got wrong was the moment it covered them up and offered
+to throw them away. `crunch.js` already carried the rule for a single question
+("never cover the worked solution with a results overlay"); this is that rule
+applied to a whole run.
+
+Modes pass `review:` to `UI.results()` — a list of
+`{ ok, prompt, yours, correct, why, label, topic, id }` — or `reviewScreen: true`
+when their own board is the better artifact. `tests/validate.js` asserts every
+`UI.results()` call site passes one or the other, so a new mode cannot ship a
+run that ends in a dead end.
+
+---
+
 ## Advanced only, or Advanced + Extension 1
 
 **The student picks, in Settings → Course.** The choice is stored in the save
@@ -247,8 +276,8 @@ which is the only thing stopping the toggle from rotting.
 ## Testing
 
 ```bash
-node tests/validate.js     # 160 checks — content, no browser needed, run this constantly
-node tests/smoke.js        #  89 checks — every screen and mode, zero console errors
+node tests/validate.js     # 165 checks — content, no browser needed, run this constantly
+node tests/smoke.js        # 104 checks — every screen and mode, zero console errors
 node tests/align.js        #  15 checks — where the maths actually lands on the line
 node tests/calc.js         #  31 checks — the calculator, and that it never raises a keyboard
 node tests/exploit.js      #  30 checks — the farming bot AND the honest player

@@ -205,7 +205,12 @@ MQ.Games.match = (function () {
         coins: Math.round(chosen.length * 3 * efficiency) + (perfect ? 25 : 0)
       });
 
+      /* No review list here: the board behind this modal is fully turned over,
+         every pair sitting next to its partner. A list of pairs the student
+         has just matched would be a worse copy of what is already on screen,
+         so the only thing worth adding is a way back to it. */
       UI.results({
+        reviewScreen: true,
         title: perfect ? "Flawless board" : "Board cleared",
         correct: chosen.length, total: chosen.length + mismatches,
         xp: got.xp, coins: got.coins, newBest,

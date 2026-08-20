@@ -86,6 +86,7 @@ MQ.Games.lab = (function () {
     S.touchStreak();
     MQ.Sound.gameStart();
 
+    const log = [];
     let round = 0, score = 0, xpEarned = 0, coinsEarned = 0, penalty = 0, finished = false;
     /* Latched on first use. NEVER cleared. */
     let readoutUsed = false;
@@ -246,6 +247,14 @@ MQ.Games.lab = (function () {
         D.point(fr, px, f(px), { r: 6, colour: fr.P.warn });
         cap.textContent = "green = exact tangent · red = yours";
 
+        log.push({
+          ok, topic: curve.topic, label: "Round " + (log.length + 1) + " · tangent",
+          prompt: curve.label(params) + `,  gradient at x = ${U.fmtNum(U.sigFig(px, 3))}`,
+          yours: U.fmtNum(userM),
+          correct: U.fmtNum(U.sigFig(exact, 5)),
+          why: curve.dfLabel(params)
+        });
+
         showFeedback(ok, within1,
           `<b>${ok ? (within1 ? "Dead on." : "Close enough.") : "Not close."}</b> ` +
           U.math(curve.dfLabel(params)) +
@@ -375,6 +384,16 @@ MQ.Games.lab = (function () {
         scoreChip.textContent = Math.max(0, xpEarned - penalty) + " XP";
 
         const lo = Math.min(a, b), hi = Math.max(a, b);
+        log.push({
+          ok, topic: curve.topic, label: "Round " + (log.length + 1) + " · area",
+          prompt: curve.label(params) +
+            `,  int_{${U.fmtNum(U.sigFig(lo, 3))}}^{${U.fmtNum(U.sigFig(hi, 3))}}`,
+          yours: raw,
+          correct: U.fmtNum(U.sigFig(exact, 6)),
+          why: `Your ${strips}-strip trapezoidal estimate was ` +
+               U.fmtNum(U.sigFig(trapEstimate(), 6)) + "."
+        });
+
         showFeedback(ok, tight,
           `<b>${ok ? "Correct." : "Not quite."}</b> ` +
           U.math(`int_{${U.fmtNum(U.sigFig(lo,3))}}^{${U.fmtNum(U.sigFig(hi,3))}}`) +
@@ -428,6 +447,7 @@ MQ.Games.lab = (function () {
           ["Readout", readoutUsed ? "used" : "unused"],
           ["Experiments", c.rounds]
         ],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

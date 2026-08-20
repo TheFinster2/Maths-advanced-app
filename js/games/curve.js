@@ -204,6 +204,7 @@ MQ.Games.curve = (function () {
     S.touchStreak();
     MQ.Sound.gameStart();
 
+    const log = [];
     let idx = 0, correct = 0, streak = 0, bestStreak = 0;
     let xpEarned = 0, coinsEarned = 0, penalty = 0, shownAt = 0, finished = false;
 
@@ -300,7 +301,7 @@ MQ.Games.curve = (function () {
             ]),
             U.el("div", { class: "plot-wrap" }, [canvas])
           ]);
-          btn.addEventListener("click", () => answer(opt, btn, order, fam));
+          btn.addEventListener("click", () => answer(opt, btn, order, round));
           buttons.push(btn);
           choiceWrap.appendChild(btn);
         });
@@ -311,7 +312,7 @@ MQ.Games.curve = (function () {
           U.el("span", { class: "choice-key", text: MQ.QuizCore.KEYS[i] }),
           U.el("span", { class: "math", html: U.math(opt.l) })
         ]);
-        btn.addEventListener("click", () => answer(opt, btn, order, fam));
+        btn.addEventListener("click", () => answer(opt, btn, order, round));
         buttons.push(btn);
         return btn;
       }
@@ -322,7 +323,8 @@ MQ.Games.curve = (function () {
       requestAnimationFrame(repaint);
     }
 
-    function answer(opt, btn, order, fam) {
+    function answer(opt, btn, order, round) {
+      const fam = round.fam;
       buttons.forEach((b, i) => {
         b.disabled = true;
         if (order[i].correct) b.classList.add("correct");
@@ -332,6 +334,18 @@ MQ.Games.curve = (function () {
       const tooFast = performance.now() - shownAt < UI.MIN_READ_MS;
       const ok = opt.correct;
       S.recordAnswer(fam.topic, ok, null);
+
+      /* Both directions are logged as equations, including the reverse round
+         where the options were graphs — "you picked the graph of y = ..." is
+         the useful thing to be told afterwards, and a canvas cannot be
+         replayed into the review sheet. */
+      log.push({
+        ok, topic: fam.topic,
+        label: "Round " + (log.length + 1) + (round.reverse ? " · equation → graph" : " · graph → equation"),
+        prompt: round.reverse ? round.key : "Which equation did the graph show?",
+        yours: opt.l,
+        correct: (order.find(o => o.correct) || {}).l
+      });
 
       if (ok) {
         correct++;
@@ -392,6 +406,7 @@ MQ.Games.curve = (function () {
         correct, total: c.count, xp: got.xp, coins: got.coins, newBest,
         extraStats: [["Best streak", bestStreak], ["Wrong", "−" + penalty + " XP"],
                      ["Mode", "generated"]],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

@@ -36,6 +36,7 @@ MQ.Games.proof = (function () {
     S.touchStreak();
     MQ.Sound.gameStart();
 
+    const log = [];
     let idx = 0, solved = 0, finished = false;
     let xpEarned = 0, coinsEarned = 0, penalty = 0;
     /* Carried ACROSS restarts — that is the whole point of tracking them here
@@ -177,6 +178,19 @@ MQ.Games.proof = (function () {
         movesSpent += moves;
         wastedTotal += wasted;
         solved++;
+        /* Every puzzle is completed in the correct order by definition — the
+           mode does not let you place a step out of turn — so what the review
+           records is the finished proof, and `ok` means you assembled it with
+           no misplaced taps. Reading the whole argument back in order is the
+           point of the mode, and it is gone the moment the next puzzle loads. */
+        log.push({
+          ok: wasted === 0, topic: p.topic, label: "Proof " + (log.length + 1),
+          prompt: p.title,
+          why: p.goal,
+          yours: wasted === 0 ? "assembled cleanly"
+                              : wasted + " misplaced " + (wasted === 1 ? "tap" : "taps"),
+          correct: p.steps.map((st, i) => (i + 1) + ". " + st).join("\n")
+        });
         S.bump("proofsSolved");
         if (p.kind === "induction") S.bump("inductionsSolved");
         S.data.proofsSolved[p.id] = Date.now();
@@ -275,6 +289,7 @@ MQ.Games.proof = (function () {
           ["Efficiency", Math.round(efficiency * 100) + "%"],
           rushed ? ["Rushed", rushed] : ["Misplaced", wastedTotal]
         ],
+        review: log,
         onAgain: () => UI.handleRoute()
       });
     }

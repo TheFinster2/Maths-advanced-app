@@ -328,3 +328,45 @@ instead of an argument.
 All nine exist in the reference app. Each is a standalone Playwright script of 60–150
 lines, so any one of them can be run on its own while you work on the thing it covers.
 Build them as you go; retrofitting them is much more expensive.
+
+---
+
+## The results overlay must not be a dead end
+
+**What broke.** Every mode ended by opening a `sticky` results modal over the
+finished screen. Its only two exits were *Back to games* and *Play again*, and
+both re-render the view — so the marked-up screen underneath was destroyed
+without ever having been read. Reported by the student using it, about Table
+Panic: fill in the grid, hit submit, and the results cover the one thing worth
+looking at. The grid behind it had every cell marked green or red with the
+missed answers filled in, and there was no way to get to it.
+
+The same defect, less visibly, in every question mode: a quiz shows one
+question at a time, so when the run ends the app is holding the only record of
+what was asked and it throws it away.
+
+**Why it survived so long.** `crunch.js` already carried the fix at the scale
+of a single question — *"never cover the worked solution with a results
+overlay; the student reads the explanation, then chooses to move on"* — and
+`lab.js` repeats it. Both were right and both were local. Nobody applied the
+same rule one level up, to the run.
+
+**The fix.** `UI.results()` takes either:
+
+- `review:` — a list of `{ ok, prompt, yours, correct, why, label, topic, id }`,
+  rendered as a scrollable sheet with a wrong-only filter and a star button per
+  item; or
+- `reviewScreen: true` — for a mode whose own screen is already the review
+  (Table Panic's marked grid, Match Pairs' turned-over board). The modal closes
+  and leaves a bar to bring it back, rather than rebuilding the board as a list
+  that would be strictly worse than the real thing.
+
+Reopening the results after a review passes `silent`, so coming back does not
+re-fire the confetti and the fanfare every time.
+
+**The regression test that matters** is the structural one, not the browser
+one. `tests/validate.js` brace-matches every `UI.results(` call site in
+`js/games/` and `js/screens/study.js` and asserts each passes one of the two
+fields. A browser test only covers the modes it walks; this covers the mode
+nobody has written yet, which is where the defect would come back.
+

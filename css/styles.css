@@ -904,6 +904,41 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); height:26px;
   overflow:hidden; text-overflow:ellipsis; }
 .result-lbl{ font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; font-weight:700; letter-spacing:.4px; }
 
+/* ── the post-run review sheet ──────────────────────────────────
+   Left-bordered like .feedback, because it is the same idea: the app telling
+   you what happened, in the one place you can still act on it. The sheet is
+   .modal-wide and scrolls; every value gets its own overflow-x so a wide
+   fraction scrolls inside its row rather than widening the modal. */
+.rev-item{ text-align:left; margin-bottom:10px; padding:12px 14px; border-radius:14px;
+  background:var(--card-2); border-left:3px solid var(--line); }
+.rev-item.ok{ border-left-color:var(--good); }
+.rev-item.no{ border-left-color:var(--bad); }
+.rev-head{ display:flex; align-items:center; gap:7px; margin-bottom:7px; flex-wrap:wrap; }
+.rev-mark{ font-weight:900; font-size:14px; flex:none; }
+.rev-item.ok .rev-mark{ color:var(--good); }
+.rev-item.no .rev-mark{ color:var(--bad); }
+.rev-head .bookmark-btn{ margin-left:0; }
+.rev-q{ font-size:14px; line-height:1.7; margin-bottom:9px; overflow-x:auto; }
+.rev-rows{ display:grid; gap:5px; }
+.rev-row{ display:flex; align-items:baseline; gap:9px; min-width:0;
+  font-size:13.5px; line-height:1.7; }
+.rev-lbl{ flex:none; width:52px; font-size:10.5px; font-weight:700; letter-spacing:.4px;
+  text-transform:uppercase; color:var(--ink-faint); }
+.rev-row.ok .rev-val{ color:var(--good); }
+.rev-row.no .rev-val{ color:var(--bad); }
+.rev-val{ min-width:0; overflow-x:auto; }
+.rev-why{ margin-top:9px; padding-top:9px; border-top:1px solid var(--line);
+  font-size:12.5px; line-height:1.75; color:var(--ink-dim); overflow-x:auto; }
+
+/* The bar left behind when the results modal steps aside so the mode's own
+   marked-up board can be read. Above the navbar, clear of the safe area. */
+.review-bar{ position:fixed; left:12px; right:12px; z-index:1200;
+  bottom:calc(max(12px,env(safe-area-inset-bottom)) + 74px);   /* clear of the navbar */
+  display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:16px;
+  background:linear-gradient(160deg,var(--bg-2),var(--bg-1)); border:1px solid var(--line);
+  box-shadow:0 12px 40px rgba(0,0,0,.5); animation:viewIn .25s ease both; }
+.review-bar-txt{ flex:1; min-width:0; font-size:12px; font-weight:700; color:var(--ink-dim); }
+
 .rank-s{ color:#ffd24a; } .rank-a{ color:#7dffa6; } .rank-b{ color:#8fd0ff; }
 .rank-c{ color:#c8b8ff; } .rank-d{ color:var(--ink-dim); }
 

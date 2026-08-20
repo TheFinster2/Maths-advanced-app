@@ -102,6 +102,7 @@ MQ.Screens.study = (function () {
     S.markMode("study");
     S.touchStreak();
 
+    const log = [];
     let idx = 0, got = 0, paid = 0, flipped = false, shownAt = 0, finished = false;
 
     const shell = UI.gameShell("🗂️ " + (name === "all" ? "Due cards" : name), { backTo: "/study",
@@ -175,6 +176,14 @@ MQ.Screens.study = (function () {
       const readLongEnough = performance.now() - shownAt >= UI.MIN_READ_MS;
       const eligible = S.cardXpEligible(card.id);
 
+      /* Self-graded, so `ok` is what the student SAID, not what the app
+         checked. Reviewing the deck afterwards is where "actually, I did not
+         know that one" happens — which is the whole reason to offer it. */
+      log.push({
+        ok, topic: card.topic, label: "Card " + (log.length + 1),
+        prompt: card.q, yours: ok ? "Got it" : "Missed it", correct: card.a
+      });
+
       if (ok) got++;
       if (ok && eligible && readLongEnough) {
         S.markCardXp(card.id);
@@ -204,6 +213,7 @@ MQ.Screens.study = (function () {
         title: "Review complete",
         correct: got, total: cards.length, xp: got_.xp, coins: got_.coins,
         extraStats: [["Paid cards", paid], ["Mastered", mastered], ["Deck", name === "all" ? "mixed" : name]],
+        review: log,
         onAgain: () => UI.go("/study")
       });
     }
