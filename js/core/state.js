@@ -438,12 +438,33 @@ MQ.State = (function () {
     return c;
   }
 
-  /** Cards due today, tier-filtered so an Advanced-only build never shows ME cards. */
+  /**
+   * Cards a study session should offer: everything due, PLUS everything never
+   * seen. A card with no record is not "due" in any meaningful sense, but it
+   * does still have to be learnt, so the session needs it.
+   */
   function dueCards(deck) {
     const today = U.dayKey();
     return (deck || MQ.Cards.all()).filter(card => {
       const c = data.srs[card.id];
       return !c || U.daysBetween(c.due, today) >= 0;
+    });
+  }
+
+  /**
+   * Cards that are genuinely DUE — seen before, and the interval has elapsed.
+   *
+   * This is the number for a dashboard, and it is not the same one. On a fresh
+   * save every card is unseen, so dueCards() returns the entire deck and a
+   * "cards due" badge reads 137 before the student has done anything. A
+   * backlog you were born with is not a call to action, it is a reason to
+   * close the app.
+   */
+  function dueCardReviews(deck) {
+    const today = U.dayKey();
+    return (deck || MQ.Cards.all()).filter(card => {
+      const c = data.srs[card.id];
+      return c && U.daysBetween(c.due, today) >= 0;
     });
   }
 
@@ -666,7 +687,7 @@ MQ.State = (function () {
     toggleBookmark, isBookmarked,
     mastery, overallAccuracy,
     usePowerup, grantPowerup, ownsTheme, ownsAvatar,
-    cardState, reviewCard, dueCards, cardXpEligible, markCardXp,
+    cardState, reviewCard, dueCards, dueCardReviews, cardXpEligible, markCardXp,
     checkAchievements, achievementStats,
     daily, dailySpec, progressDaily, claimDaily,
     exportSave, importSave, replaceSave, isFrozen, reset

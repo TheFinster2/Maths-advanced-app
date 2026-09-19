@@ -8,31 +8,50 @@ MQ.Screens.home = function (view) {
 
   /* ── hero ── */
   const weak = MQ.Bank.weakestTopic();
+  /* Genuine reviews only — see dueCardReviews(). Counting never-seen cards
+     here would greet a new student with a 137-card "backlog". */
+  const dueCards = S.dueCardReviews().length;
+  const dueQs = S.dueReviews().length;
   view.appendChild(U.el("div", { class: "hero" }, [
     U.el("h1", { text: greeting() }),
     U.el("p", { html: d.stats.answered
       ? `You have answered <b>${d.stats.answered.toLocaleString()}</b> questions at ` +
         `<b>${S.overallAccuracy()}%</b> accuracy. ` +
-        (weak ? `Weakest topic right now: <b>${U.escapeHtml(weak.short)}</b>.` : "")
+        (dueQs
+          ? `<b>${dueQs}</b> ${dueQs === 1 ? "question is" : "questions are"} due for review — ` +
+            "those come first."
+          : weak ? `Weakest topic right now: <b>${U.escapeHtml(weak.short)}</b>.` : "")
       : "A game-based trainer for HSC Mathematics. Start anywhere — the app will work out what you need." }),
+    /* Whatever is DUE gets the primary button. Spacing only pays if the
+       student comes back on the day the schedule asks for, and a queue that
+       has to be gone looking for under Play is a queue that gets skipped —
+       which turns the whole ladder into an elaborate way of never revising.
+       Rapid Fire keeps the slot when nothing is waiting. */
     U.el("div", { class: "row" }, [
-      U.el("button", { class: "btn btn-primary", text: "⚡ Rapid Fire",
-        on: { click: () => UI.go("/game/rapid") } }),
-      weak
-        ? U.el("button", { class: "btn", text: "🎯 Drill " + weak.short,
-            on: { click: () => UI.go("/game/drill/" + weak.id) } })
-        : U.el("button", { class: "btn", text: "🎮 All games", on: { click: () => UI.go("/play") } }),
-      U.el("button", { class: "btn btn-ghost", text: "🗂️ Study", on: { click: () => UI.go("/study") } })
+      dueQs
+        ? U.el("button", { class: "btn btn-primary",
+            text: "🩹 " + dueQs + " due for review",
+            on: { click: () => UI.go("/game/mistakes") } })
+        : U.el("button", { class: "btn btn-primary", text: "⚡ Rapid Fire",
+            on: { click: () => UI.go("/game/rapid") } }),
+      dueCards
+        ? U.el("button", { class: "btn", text: "🗂️ " + dueCards + " cards due",
+            on: { click: () => UI.go("/study") } })
+        : weak
+          ? U.el("button", { class: "btn", text: "🎯 Drill " + weak.short,
+              on: { click: () => UI.go("/game/drill/" + weak.id) } })
+          : U.el("button", { class: "btn", text: "🎮 All games", on: { click: () => UI.go("/play") } }),
+      U.el("button", { class: "btn btn-ghost", text: dueQs ? "⚡ Rapid Fire" : "🗂️ Study",
+        on: { click: () => UI.go(dueQs ? "/game/rapid" : "/study") } })
     ])
   ]));
 
   /* ── quick stats ── */
-  const due = S.dueCards().length;
   view.appendChild(U.el("div", { class: "grid g4", style: "margin-top:16px" }, [
     tile(d.level, "Level"),
     tile(d.streak.count, "Day streak"),
     tile(S.overallAccuracy() + "%", "Accuracy"),
-    tile(due, "Cards due")
+    tile(dueQs + dueCards, "Due today")
   ]));
 
   /* ── daily challenge ── */

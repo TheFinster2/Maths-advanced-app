@@ -182,6 +182,98 @@ wider than the phone" regressions.
 
 ---
 
+## How it decides what to ask you
+
+Three mechanics, each chosen because the evidence for it is unusually strong and
+because the obvious alternative is unusually bad. They are not decoration: each
+one replaced something the app used to do.
+
+### The review queue — spaced, not one-shot
+
+Miss a question and it enters a queue on a Leitner ladder: **1, 2, 4, 8, 16
+days**. A correct recall moves it up a step, a lapse resets it to the bottom,
+and it only graduates out after **five** correct recalls across widening gaps.
+
+This replaced a flat list of outstanding mistakes that cleared the moment you
+got a question right once. That encoded "one successful retrieval means
+learned", which is the claim the retrieval-practice literature is most
+consistent about being false — a correct answer thirty seconds after reading
+the explanation is mostly measuring working memory. Successful *relearning*
+needs several retrievals, spaced out.
+
+So Progress shows two numbers, and both matter: **due** is what to do today,
+**in the queue** is what is still not learnt. The second falls slowly on
+purpose. Whether the intervals expand or stay equal turns out not to matter
+much in the literature; that they exist at all does.
+
+### Interleaving — by sub-skill, not by topic
+
+Every draw is reordered so consecutive questions need a different **sub-skill**.
+Rohrer, Dedrick, Hartwig & Cheung (2020) ran interleaved against blocked maths
+practice across four months and 787 students and measured 61% against 38% on an
+unannounced test a month later — d = 0.83, which is enormous for an
+intervention this cheap. Their operationalisation is the part worth copying:
+*no two consecutive problems require the same strategy.*
+
+Sub-skill is the right unit, and topic is not. Inside a single-topic drill
+every question shares a topic, and eight product-rule questions in a row is
+exactly the blocked pattern that trial beat. Alternating product, quotient and
+chain rule is what forces the student to work out *which rule applies* — the
+part a real exam tests and blocked practice never trains.
+
+The reorder drains the largest remaining skill group first. That provably hits
+the best ordering the set allows (`max(0, 2m-n-1)` repeats for `m` copies of
+the commonest skill among `n` questions); the obvious greedy version — take the
+first question that differs — lands about one repeat short, because it leaves
+the commonest skill stacked at the end with nothing to separate it.
+
+### The recall check — generate, then recognise
+
+In untimed modes the options stay hidden until you tap one of **I know it /
+I think so / No idea**. One tap, doing two jobs:
+
+- **Hiding the options** turns recognition into cued recall. Generating an
+  answer produces a stronger testing effect than selecting one, and the gap
+  grows with the delay before the real test — which for an HSC student is the
+  only delay that matters.
+- **Rating confidence before the reveal** measures what was actually recalled.
+  Ask afterwards and you are scoring how plausible four visible options looked,
+  not what was in memory.
+
+Timed modes never ask. A clock turns thinking time into a penalty, so Rapid
+Fire, Survival and the Exam Bosses are left alone. It is one toggle in
+Settings → Practice for anyone who hates it.
+
+Because the sub-skill chip *names the strategy*, it is withheld while the
+options are hidden and restored on reveal. The app already treats that as
+hint-grade information — the Insight power-up's entire function is to sell you
+`q.sub` — so showing it beside a hidden question was giving away the one thing
+interleaving exists to train.
+
+### Calibration, and why confident misses come back hardest
+
+Confidence is counted against outcome and shown on Progress as **how well you
+know what you know**. The gap between the label and the percentage is the
+useful number: a student who is right 55% of the time when *certain* is not
+short of practice, they are short of a way to tell which of their beliefs are
+wrong — and that is the thing re-reading never fixes.
+
+A question missed while the student said "I know it" is flagged and weighted
+hardest in the queue. This is the **hypercorrection effect**: a confident error
+is a belief rather than a gap, and being wrong when you were sure is
+surprising, which is precisely what makes the correction stick.
+
+Sources for the above: [Rohrer et al. 2020, *A Randomized Controlled Trial of
+Interleaved Mathematics Practice*](https://gwern.net/doc/psychology/spaced-repetition/2019-rohrer.pdf) ·
+[*The science of effective learning with spacing and retrieval practice*, Nature
+Reviews Psychology](https://www.nature.com/articles/s44159-022-00089-1) ·
+[short-answer vs multiple-choice retrieval
+practice](https://www.tandfonline.com/doi/full/10.1080/20445911.2022.2085281) ·
+[hypercorrection and
+metacognition](https://www.improvewithmetacognition.com/hypercorrection-overcoming-overconfidence-metacognition/).
+
+---
+
 ## Reviewing your answers after a run
 
 Every run ends on a results screen, and every results screen has a way back to
@@ -276,7 +368,7 @@ which is the only thing stopping the toggle from rotting.
 ## Testing
 
 ```bash
-node tests/validate.js     # 165 checks — content, no browser needed, run this constantly
+node tests/validate.js     # 189 checks — content, no browser needed, run this constantly
 node tests/smoke.js        # 104 checks — every screen and mode, zero console errors
 node tests/align.js        #  15 checks — where the maths actually lands on the line
 node tests/calc.js         #  31 checks — the calculator, and that it never raises a keyboard
@@ -324,13 +416,15 @@ BREAK=answer-first node tests/validate.js
 
 This deletes a specific guard with a regex, checks the patched file still
 parses, and then asserts the suite **fails**. A test that passes with its fix
-removed is worthless. Eight guards are covered:
+removed is worthless. Ten guards are covered:
 
 | `BREAK=` | The guard it deletes |
 |---|---|
 | `answer-first` | Generators derive the answer independently of `make()` |
 | `tier-filter` | The question bank filters on the tier toggle |
 | `tier-cache` | Switching course drops every memoised, tier-filtered list |
+| `one-and-done` | A missed question needs FIVE spaced recalls, not one, to clear |
+| `blocked` | Draws are reordered so consecutive questions need different skills |
 | `escape` | The renderer escapes HTML *before* substituting |
 | `domain` | Equivalence checking respects a declared domain |
 | `minclean` | Equivalence requires enough defined sample points |
