@@ -347,8 +347,14 @@ MQ.State = (function () {
     const c = data.calibration || {};
     return MQ.DATA.CONFIDENCE.map(lvl => {
       const k = c[lvl.id] || { n: 0, right: 0 };
-      return { id: lvl.id, label: lvl.label, n: k.n, right: k.right,
-               pct: k.n ? Math.round((k.right / k.n) * 100) : null };
+      const pct = k.n ? Math.round((k.right / k.n) * 100) : null;
+      /* Signed, deliberately: over is overconfident and under is
+         underconfident, and they call for opposite advice. */
+      const off = pct === null ? null : pct - lvl.target;
+      return { id: lvl.id, label: lvl.label, n: k.n, right: k.right, pct,
+               target: lvl.target, off,
+               band: off === null ? null
+                   : Math.abs(off) <= 15 ? "good" : Math.abs(off) <= 30 ? "near" : "off" };
     }).filter(x => x.n > 0);
   }
 

@@ -175,13 +175,20 @@ MQ.DATA.difficulties = [
 
    `weight` feeds the review queue: a confident miss is a belief rather than a
    gap, and the surprise of being wrong when you were sure is exactly what
-   makes the correction stick, so it comes back hardest. */
+   makes the correction stick, so it comes back hardest.
+
+   `target` is roughly where each level SHOULD land for a well-calibrated
+   student, and it is what the Progress readout colours against. Raw accuracy
+   would be the wrong thing to colour: 33% on "No idea" is not a bad score, it
+   is an honest one — four options, so a real guess lands near 25%. Someone
+   scoring 70% on questions they called guesses is not lucky, they are
+   underconfident, and that is worth telling them too. */
 MQ.DATA.CONFIDENCE = [
-  { id:"sure",  label:"I know it",  icon:"💡", weight:3.0,
+  { id:"sure",  label:"I know it",  icon:"💡", weight:3.0, target:90,
     desc:"Certain before you saw the options." },
-  { id:"think", label:"I think so", icon:"🤔", weight:1.6,
+  { id:"think", label:"I think so", icon:"🤔", weight:1.6, target:65,
     desc:"Fairly sure, not certain." },
-  { id:"guess", label:"No idea",    icon:"🎲", weight:1.0,
+  { id:"guess", label:"No idea",    icon:"🎲", weight:1.0, target:25,
     desc:"Reveal them — this one is a guess." }
 ];
 MQ.DATA.confidenceOf = id => MQ.DATA.CONFIDENCE.find(c => c.id === id) || null;

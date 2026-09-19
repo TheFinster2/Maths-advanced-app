@@ -513,8 +513,15 @@ code,.mono{ font-family:"Cascadia Code",ui-monospace,"SF Mono",Menlo,Consolas,mo
 .calib-row{ display:flex; align-items:center; gap:10px; padding:9px 0; }
 .calib-lbl{ flex:none; width:92px; font-size:12.5px; font-weight:700; }
 .calib-bar{ flex:1; min-width:0; height:9px; border-radius:99px; background:var(--card-2);
-  overflow:hidden; }
-.calib-bar i{ display:block; height:100%; border-radius:99px; background:var(--accent); }
+  position:relative; }
+.calib-bar i{ display:block; height:100%; border-radius:99px; background:var(--accent);
+  transition:width .3s ease; }
+/* The mark a well-calibrated student would hit, so the GAP is the readable part. */
+.calib-target{ position:absolute; top:-3px; width:2px; height:15px; border-radius:2px;
+  background:var(--ink-faint); transform:translateX(-1px); }
+.calib-good i{ background:var(--good); }
+.calib-near i{ background:var(--warn,#ffd24a); }
+.calib-off  i{ background:var(--bad); }
 .calib-pct{ flex:none; width:72px; text-align:right; font-size:12px; font-weight:800;
   font-variant-numeric:tabular-nums; }
 

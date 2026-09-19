@@ -123,14 +123,22 @@ MQ.Screens.progress = function (view) {
   if (calib.length) {
     const sure = calib.find(c => c.id === "sure");
     view.appendChild(U.el("h2", {}, [
-      document.createTextNode("How well you know what you know"),
-      U.el("span", { class: "h2-sub", text: "recall check" })
+      document.createTextNode("Calibration"),
+      U.el("span", { class: "h2-sub", text: "how well you know what you know" })
     ]));
     const card = U.el("div", { class: "card" });
     calib.forEach(c => {
-      card.appendChild(U.el("div", { class: "calib-row" }, [
+      /* Coloured by DISTANCE FROM TARGET, not by height. Three identical bars
+         hide the only thing this chart is for: 33% on "No idea" is honest and
+         60% on "I know it" is not, and they must not look the same. */
+      card.appendChild(U.el("div", { class: "calib-row calib-" + c.band }, [
         U.el("div", { class: "calib-lbl", text: c.label }),
-        U.el("div", { class: "calib-bar" }, [U.el("i", { style: "width:" + c.pct + "%" })]),
+        U.el("div", { class: "calib-bar" }, [
+          U.el("i", { style: "width:" + c.pct + "%" }),
+          // Where a well-calibrated student would land.
+          U.el("b", { class: "calib-target", style: "left:" + c.target + "%",
+            title: "about " + c.target + "% for a well-calibrated student" })
+        ]),
         U.el("div", { class: "calib-pct", text: c.pct + "% of " + c.n })
       ]));
     });
