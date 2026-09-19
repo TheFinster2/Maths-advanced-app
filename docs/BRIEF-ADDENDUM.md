@@ -370,3 +370,69 @@ one. `tests/validate.js` brace-matches every `UI.results(` call site in
 fields. A browser test only covers the modes it walks; this covers the mode
 nobody has written yet, which is where the defect would come back.
 
+---
+
+## The pedagogy is a feature, and it has to be tested like one
+
+Three mechanics were added after checking what the learning-science literature
+actually supports. Each replaced something that was not neutral — it was the
+option the evidence argues against.
+
+**One correct answer is not learning.** The mistake list cleared a question the
+first time it was answered right. That is "one successful retrieval means
+learned", which the retrieval-practice literature is unusually consistent about
+being false: a correct answer thirty seconds after reading the explanation is
+measuring working memory. Missed questions now ride the flashcards' existing
+Leitner ladder (1/2/4/8/16 days) and need five correct recalls across widening
+gaps to graduate. A lapse resets to the bottom.
+
+**Blocked practice is the default and it is the weak one.** Rohrer et al.
+(2020), 787 students over four months: interleaved 61% vs blocked 38% on a
+delayed test, d = 0.83. Their operationalisation — *no two consecutive problems
+require the same strategy* — is what to copy. The unit is the **sub-skill**,
+not the topic: a single-topic drill is where blocking actually happens, and
+alternating product/quotient/chain rule is the thing that trains "which rule
+applies". Reorder by draining the largest remaining skill group first; the
+obvious greedy version (take the first one that differs) lands about one repeat
+above optimal because it strands the commonest skill at the end.
+
+**Recognition is not recall.** Hiding the options behind a single confidence tap
+buys a generation attempt *and* a calibration datum, and taking the confidence
+before the reveal is what makes it measure memory rather than how plausible
+four visible options looked. Never on a clock: a timer turns thinking time into
+a penalty.
+
+### What testing this taught us
+
+**A "looks shuffled" tolerance passes with the shuffler deleted.** The first
+interleaving test allowed up to `length - distinctSkills` adjacent repeats. A
+plain random shuffle of 15 questions over 7 sub-skills already averages about
+two, so the test passed with the interleaver removed. Measure against the
+**floor the multiset allows** — `max(0, 2m-n-1)` for `m` copies of the
+commonest skill among `n` — and average over repeated draws, or the test is
+sampling a random process and will fail one run in twenty. `BREAK=blocked` is
+what caught this.
+
+**A test that asserts a DIRECTION on a toggle is flaky by construction.** The
+review sheet's star check asserted the bookmark count went `+1`. An earlier
+check in the same run stars a question mid-quiz, and the drill sometimes
+redrew it — so the click un-starred and the delta was `-1`. Assert the state
+you expect, not the direction you expect it to move.
+
+**Existing bots have to learn the new gate.** The recall check broke the smoke
+test and the honest-player half of the farm test, both of which clicked
+`.choice` directly. Worth fixing in the right place: the *honest* bot says "I
+know it", the *farming* bot taps whatever clears the gate fastest. A farm test
+that passes because the bot got stuck on a gate proves nothing.
+
+**Dogfooding found what reading could not.** Playing a full drill surfaced that
+the sub-skill chip printed "Quotient rule" next to a hidden question — handing
+over the exact decision interleaving exists to train. The app already priced
+that information: the Insight power-up's whole function is to sell you `q.sub`.
+It was also possible to spend 50/50 while the options were still hidden.
+
+**A dashboard number must not count things you were born with.** `dueCards()`
+returns everything due *plus* everything never seen, which is right for a study
+session and wrong for a badge — on a fresh save Home announced a 137-card
+backlog before the student had answered anything.
+
