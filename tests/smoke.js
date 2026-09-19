@@ -68,6 +68,7 @@ const PORT = 8821;
     await H.goTo(page, "/game/drill/MA-C2");
     await page.waitForTimeout(1400);   // clear MIN_READ_MS so the answer pays
     const before = await H.snapshot(page);
+    await H.passRecallGate(page);
     await page.click(".choice");
     await page.waitForTimeout(250);
     R.ok(await page.evaluate(() => !!document.querySelector(".feedback")),
@@ -93,6 +94,7 @@ const PORT = 8821;
        correct answer, the player takes it on a wrong one. Asserting only the
        boss bar makes the test depend on the shuffled option order, which is a
        coin flip and therefore a flaky test rather than a real check. */
+    await H.passRecallGate(page);
     await page.click(".choice");
     await page.waitForTimeout(350);
     const bars = await page.evaluate(() => ({
@@ -315,6 +317,8 @@ const PORT = 8821;
     for (let i = 0; i < 15; i++) {
       const label = await page.evaluate(n => {
         const a = window.MQ.__current.answer;
+        const gate = document.querySelector(".recall-gate");
+        if (gate) gate.querySelector(".recall-btn").click();
         const btns = [...document.querySelectorAll(".choice")].filter(b => !b.disabled);
         if (!btns.length) return "done";
         btns[n % 2 === 0 ? a : (a + 1) % btns.length].click();
@@ -354,12 +358,20 @@ const PORT = 8821;
 
     /* Starring from the review sheet — the moment a student actually knows
        which question they want to see again. */
+    /* Clear first, and assert on the ID rather than the count. An earlier
+       check in this run stars a question mid-quiz, and the drill can redraw
+       that same question — then this click UN-stars it and a count delta of
+       +1 never arrives. The star is a toggle, so the test has to say which
+       state it expects rather than which direction it moved. */
     const starred = await page.evaluate(() => {
-      const before = window.MQ.State.data.bookmarks.length;
-      document.querySelector(".rev-item .bookmark-btn").click();
-      return window.MQ.State.data.bookmarks.length - before;
+      window.MQ.State.data.bookmarks.length = 0;
+      const item = document.querySelector(".rev-item");
+      item.querySelector(".bookmark-btn").click();
+      const marks = window.MQ.State.data.bookmarks;
+      return { n: marks.length, on: item.querySelector(".bookmark-btn").classList.contains("on") };
     });
-    R.ok(starred === 1, "a question can be starred from the review sheet");
+    R.ok(starred.n === 1 && starred.on,
+      "a question can be starred from the review sheet", JSON.stringify(starred));
 
     const filtered = await page.evaluate(() => {
       const b = [...document.querySelectorAll("button")].find(x => /Only what I missed/.test(x.textContent));

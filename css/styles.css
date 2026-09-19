@@ -485,6 +485,39 @@ code,.mono{ font-family:"Cascadia Code",ui-monospace,"SF Mono",Menlo,Consolas,mo
 .choice.wrong .choice-key{ background:var(--bad); color:#fff; }
 .choice.dimmed{ opacity:.3; }
 
+.run-note{ padding:9px 12px; border-radius:12px; background:var(--card-2);
+  border-left:3px solid var(--accent); line-height:1.6; }
+
+/* ── the recall check ───────────────────────────────────────────
+   Sits where the options will appear, so the eye lands on it rather than
+   hunting for it, and so the options open into the same place the gate left. */
+.recall-gate{ margin-top:16px; padding:14px; border-radius:16px; background:var(--card-2);
+  border:1px dashed var(--line); animation:viewIn .25s ease both; }
+.recall-ask{ font-size:12.5px; font-weight:700; color:var(--ink-dim); text-align:center;
+  margin-bottom:11px; }
+.recall-opts{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.recall-btn{ display:grid; justify-items:center; gap:5px; padding:12px 6px; min-width:0;
+  border-radius:14px; border:1px solid var(--line); background:var(--card);
+  cursor:pointer; transition:.15s; color:var(--ink); }
+.recall-btn:hover{ transform:translateY(-2px); border-color:var(--accent); }
+.recall-ico{ font-size:20px; line-height:1; }
+.recall-lbl{ font-size:11px; font-weight:700; letter-spacing:.2px; text-align:center;
+  overflow-wrap:anywhere; }
+.recall-sure:hover{ border-color:var(--good); }
+.recall-guess:hover{ border-color:var(--ink-faint); }
+
+.chip-warn{ background:color-mix(in srgb,var(--bad) 22%,transparent); border-color:var(--bad);
+  color:var(--ink); }
+
+/* Calibration readout on Progress. */
+.calib-row{ display:flex; align-items:center; gap:10px; padding:9px 0; }
+.calib-lbl{ flex:none; width:92px; font-size:12.5px; font-weight:700; }
+.calib-bar{ flex:1; min-width:0; height:9px; border-radius:99px; background:var(--card-2);
+  overflow:hidden; }
+.calib-bar i{ display:block; height:100%; border-radius:99px; background:var(--accent); }
+.calib-pct{ flex:none; width:72px; text-align:right; font-size:12px; font-weight:800;
+  font-variant-numeric:tabular-nums; }
+
 .feedback{ margin-top:14px; padding:13px 15px; border-radius:14px; border-left:3px solid var(--accent);
   background:var(--card-2); font-size:13.5px; line-height:1.8; animation:viewIn .25s ease both; overflow-x:auto; }
 .feedback.ok{ border-left-color:var(--good); }
@@ -913,11 +946,12 @@ input[type=range]{ flex:1; min-width:0; accent-color:var(--accent); height:26px;
   background:var(--card-2); border-left:3px solid var(--line); }
 .rev-item.ok{ border-left-color:var(--good); }
 .rev-item.no{ border-left-color:var(--bad); }
-.rev-head{ display:flex; align-items:center; gap:7px; margin-bottom:7px; flex-wrap:wrap; }
+.rev-head{ display:flex; align-items:flex-start; gap:7px; margin-bottom:7px; }
+.rev-chips{ flex:1; min-width:0; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .rev-mark{ font-weight:900; font-size:14px; flex:none; }
 .rev-item.ok .rev-mark{ color:var(--good); }
 .rev-item.no .rev-mark{ color:var(--bad); }
-.rev-head .bookmark-btn{ margin-left:0; }
+.rev-head .bookmark-btn{ margin-left:0; flex:none; }
 .rev-q{ font-size:14px; line-height:1.7; margin-bottom:9px; overflow-x:auto; }
 .rev-rows{ display:grid; gap:5px; }
 .rev-row{ display:flex; align-items:baseline; gap:9px; min-width:0;

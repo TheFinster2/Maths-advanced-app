@@ -83,13 +83,75 @@ MQ.Bank = (function () {
     return pool;
   }
 
-  /** Weight for the adaptive draw: mistakes first, weak topics next. */
-  function weightFor(q, mistakeIds, topicAcc) {
+  /** Weight for the adaptive draw: due reviews first, then weak topics. */
+  function weightFor(q, queue, topicAcc) {
     let w = 1;
-    if (mistakeIds.has(q.id)) w += 3.5;
+    const rec = queue.get(q.id);
+    if (rec) {
+      /* Due beats not-due by a lot, but a not-due entry still outranks a
+         question never seen — it is known-shaky either way. Scheduling it
+         EARLY would undo the spacing, so the boost is small until it is due. */
+      w += rec.due ? 3.5 : 0.75;
+      // Hypercorrection: a confident miss is the most correctable error there is.
+      if (rec.hiConf) w += 1.5;
+      w += Math.min(2, (rec.misses || 1) - 1) * 0.5;
+    }
     const acc = topicAcc[q.topic];
     if (acc !== undefined && acc < 0.7) w += (0.7 - acc) * 4;
     return w;
+  }
+
+  /* ── interleaving ────────────────────────────────────────────
+     Rohrer, Dedrick, Hartwig & Cheung (2020) ran interleaved against blocked
+     maths practice across four months and 787 students: 61% against 38% on an
+     unannounced test a month later, d = 0.83. Their operationalisation is the
+     specific thing that matters, and it is simple enough to just implement —
+     "no two consecutive problems require the same strategy".
+
+     The key is the SUB-SKILL, not the topic. Inside a single-topic drill every
+     question shares a topic, and blocking eight product-rule questions in a
+     row is exactly the pattern the trial beat; alternating product, quotient
+     and chain rule is what makes the student decide WHICH rule applies, which
+     is the part a real exam tests and blocked practice never trains.
+
+     Take from the LARGEST remaining skill group that is not the one just
+     placed. Taking merely the first different one — the obvious greedy move —
+     leaves the commonest skill stacked up at the end with nothing to separate
+     it, and lands about one repeat above optimal on a fifteen-question drill.
+     Draining the biggest group first is what keeps the run alternating all the
+     way to the last question, and it provably hits the best any arrangement of
+     that multiset can do: max(0, 2m-n-1) repeats for m copies of the
+     commonest skill among n questions.
+
+     Within a group the order is left alone, so the adaptive weighting above
+     still decides WHICH product-rule question you get; this only decides when.
+     When every remaining question shares the last skill it places a repeat
+     rather than dropping one — a shorter run is a worse trade than an
+     imperfect alternation. */
+  const skillOf = q => q.topic + "·" + (q.sub || "");
+
+  function interleave(list) {
+    const groups = new Map();
+    list.forEach(q => {
+      const k = skillOf(q);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(q);
+    });
+
+    const out = [];
+    let last = null;
+    while (out.length < list.length) {
+      let pick = null;
+      groups.forEach((items, k) => {
+        if (!items.length || k === last) return;
+        if (!pick || items.length > groups.get(pick).length) pick = k;
+      });
+      // Only the just-placed skill is left: place it rather than lose it.
+      if (pick === null) groups.forEach((items, k) => { if (items.length) pick = k; });
+      out.push(groups.get(pick).shift());
+      last = pick;
+    }
+    return out;
   }
 
   /**
@@ -106,15 +168,26 @@ MQ.Bank = (function () {
       chosen = U.sample(pool, n);
     } else {
       const st = MQ.State.data;
-      const mistakeIds = new Set((st.mistakes || []).map(m => m.id));
+      /* id -> { due, hiConf, misses }. Built once per draw rather than per
+         question: the queue holds up to 150 entries and the pool can be the
+         whole bank. */
+      const today = MQ.U.dayKey();
+      const queue = new Map((st.mistakes || []).map(m => [m.id, {
+        due: !m.due || MQ.U.daysBetween(m.due, today) >= 0,
+        hiConf: !!m.hiConf, misses: m.misses
+      }]));
       const topicAcc = {};
       for (const [k, v] of Object.entries(st.topics || {})) {
         if (v.seen >= 4) topicAcc[k] = v.correct / v.seen;
       }
-      const bag = pool.map(q => ({ q, w: weightFor(q, mistakeIds, topicAcc) * (0.5 + Math.random()) }));
+      const bag = pool.map(q => ({ q, w: weightFor(q, queue, topicAcc) * (0.5 + Math.random()) }));
       bag.sort((a, b) => b.w - a.w);
       chosen = U.shuffle(bag.slice(0, n).map(x => x.q));
     }
+
+    // Order is a teaching decision, so it is applied to every draw — including
+    // the un-adaptive ones, which are still sat one after another.
+    if (o.interleave !== false) chosen = interleave(chosen);
 
     return chosen.map(q => (o.shuffleChoices === false ? clone(q) : shuffleChoices(q)));
   }
@@ -131,10 +204,18 @@ MQ.Bank = (function () {
     });
   }
 
-  /** Questions previously got wrong, most recent first. */
-  function mistakeQuestions() {
-    return (MQ.State.data.mistakes || []).map(m => byId(m.id)).filter(Boolean).map(shuffleChoices);
+  /**
+   * Questions in the review queue. `dueOnly` restricts to the ones whose
+   * spaced interval has elapsed — which is what Review Queue draws first, and
+   * what the Progress screen counts.
+   */
+  function reviewQuestions(dueOnly) {
+    const src = dueOnly ? MQ.State.dueReviews() : (MQ.State.data.mistakes || []);
+    return interleave(src.map(m => byId(m.id)).filter(Boolean)).map(shuffleChoices);
   }
+
+  /** Kept as the old name for anything still asking for "mistakes". */
+  const mistakeQuestions = () => reviewQuestions(false);
 
   function bookmarkedQuestions() {
     return (MQ.State.data.bookmarks || []).map(byId).filter(Boolean).map(shuffleChoices);
@@ -165,6 +246,7 @@ MQ.Bank = (function () {
   MQ.DATA.onTierChange(() => { ALL = null; INDEX = null; });
 
   return { register, all, shipped, byId, TOPICS, topics, topicName, topicFull, topicMeta, groupTopics,
-           filter, draw, shuffleChoices, mistakeQuestions, bookmarkedQuestions,
+           filter, draw, shuffleChoices, interleave, skillOf,
+           reviewQuestions, mistakeQuestions, bookmarkedQuestions,
            statsByTopic, weakestTopic };
 })();

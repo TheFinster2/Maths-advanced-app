@@ -158,6 +158,34 @@ MQ.DATA.difficulties = [
     desc:"Barely any time, brutal bosses, no 50/50 or Skip. Double XP for the reckless." }
 ];
 
+/* ── the recall check ───────────────────────────────────────────
+   Three levels, tapped BEFORE the options are revealed. That ordering is the
+   whole point and is not an accident of layout:
+
+   · Hiding the options first turns a recognition task into a cued-recall one.
+     Generating an answer produces a markedly stronger testing effect than
+     picking one, and the gap widens the longer the delay before the real exam
+     — which for an HSC student is the only delay that matters.
+   · Rating confidence BEFORE seeing the options measures what the student
+     actually recalled, not how plausible the four options looked once shown.
+     Ask afterwards and you are scoring their recognition, not their memory.
+
+   One tap does both, so this costs a student one extra tap per question and
+   buys a generation attempt and a calibration datum.
+
+   `weight` feeds the review queue: a confident miss is a belief rather than a
+   gap, and the surprise of being wrong when you were sure is exactly what
+   makes the correction stick, so it comes back hardest. */
+MQ.DATA.CONFIDENCE = [
+  { id:"sure",  label:"I know it",  icon:"💡", weight:3.0,
+    desc:"Certain before you saw the options." },
+  { id:"think", label:"I think so", icon:"🤔", weight:1.6,
+    desc:"Fairly sure, not certain." },
+  { id:"guess", label:"No idea",    icon:"🎲", weight:1.0,
+    desc:"Reveal them — this one is a guess." }
+];
+MQ.DATA.confidenceOf = id => MQ.DATA.CONFIDENCE.find(c => c.id === id) || null;
+
 /* Topic mastery tiers, checked against State.mastery(). */
 MQ.DATA.masteryTiers = [
   { at:0,  name:"Unranked", icon:"▪️", colour:"var(--ink-faint)" },

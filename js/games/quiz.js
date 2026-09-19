@@ -10,8 +10,10 @@ MQ.QuizCore = (function () {
   const KEYS = ["A", "B", "C", "D", "E", "F"];
 
   /**
-   * opts: { onAnswer(index, isCorrect, buttonEl), showTags, index, total, hideTopic }
-   * Returns { node, reveal(chosen), buttons, disable(), fiftyFifty() }
+   * opts: { onAnswer(index, isCorrect, buttonEl), showTags, index, total,
+   *         hideTopic, recallCheck, onRecall(confidenceId) }
+   * Returns { node, reveal(chosen), buttons, disable(), fiftyFifty(),
+   *           gated(), confidence() }
    */
   function buildCard(q, opts) {
     const o = opts || {};
@@ -35,7 +37,13 @@ MQ.QuizCore = (function () {
       o.hideTopic ? U.el("span", { class: "chip", text: "???" })
                   : U.el("span", { class: "chip", text: MQ.Bank.topicName(q.topic) }),
       o.hideTopic ? null : MQ.UI.tierChip(q.topic),
-      o.hideTopic ? null : U.el("span", { class: "chip", text: q.sub || "" }),
+      /* The SUB-SKILL is withheld until the options are revealed. It names the
+         strategy — "Quotient rule" — and working out which strategy applies is
+         the entire thing interleaving trains; handing it over for free undoes
+         that. The app already treats this as hint-grade information: the
+         Insight power-up's whole function is to sell you q.sub. Showing it
+         beside a hidden question was giving that away for nothing. */
+      o.hideTopic || o.recallCheck ? null : U.el("span", { class: "chip", text: q.sub || "" }),
       U.el("span", { class: "chip", text: "★".repeat(q.diff || 1) }),
       star
     ]);
@@ -58,9 +66,53 @@ MQ.QuizCore = (function () {
 
     // See the test hook note in js/core/ui.js.
     MQ.__current = { kind: "quiz", answer: q.a, id: q.id };
+    /* ── the recall check ─────────────────────────────────────────
+       See MQ.DATA.CONFIDENCE for why this sits BEFORE the options rather than
+       after the answer. In short: the options are hidden so the student has to
+       generate the answer instead of recognising it, and the confidence rating
+       is taken while it is still a memory rather than a judgement about four
+       options they can already see.
+
+       The buttons start DISABLED rather than merely hidden. The quiz binds
+       number keys straight to buttons[n].click(), and a hidden-but-live button
+       would let a keyboard answer skip the gate entirely. */
+    let confidence = null;
+    let gate = null;
+
+    if (o.recallCheck) {
+      buttons.forEach(b => (b.disabled = true));
+      choiceWrap.hidden = true;
+      gate = U.el("div", { class: "recall-gate" }, [
+        U.el("div", { class: "recall-ask", text: "Work it out first — then say how sure you are." }),
+        U.el("div", { class: "recall-opts" }, MQ.DATA.CONFIDENCE.map(lvl =>
+          U.el("button", { class: "recall-btn recall-" + lvl.id, type: "button", title: lvl.desc }, [
+            U.el("span", { class: "recall-ico", text: lvl.icon }),
+            U.el("span", { class: "recall-lbl", text: lvl.label })
+          ])
+        ).map((btn, i) => {
+          btn.addEventListener("click", () => {
+            confidence = MQ.DATA.CONFIDENCE[i].id;
+            openChoices();
+            MQ.Sound.tap();
+            o.onRecall && o.onRecall(confidence);
+          });
+          return btn;
+        }))
+      ]);
+    }
+
+    function openChoices() {
+      if (!gate) return;
+      gate.remove();
+      gate = null;
+      choiceWrap.hidden = false;
+      buttons.forEach(b => (b.disabled = false));
+    }
+
     const node = U.el("div", { class: "qcard" }, [
       o.showTags === false ? null : tags,
       U.el("div", { class: "qtext math", html: U.math(q.q) }),
+      gate,
       choiceWrap
     ]);
 
@@ -68,7 +120,13 @@ MQ.QuizCore = (function () {
 
     /** Mark the chosen answer and always show the correct one. */
     function reveal(chosen) {
-      disable();
+      openChoices();       // a timeout reveals the options too, or the card
+      disable();           // ends showing a question with no answer on it
+      // Now it can be named: the answer is on screen, so it is context rather
+      // than a hint, and it is genuinely useful when reading the explanation.
+      if (o.recallCheck && !o.hideTopic && q.sub && !tags.querySelector(".js-sub")) {
+        tags.insertBefore(U.el("span", { class: "chip js-sub", text: q.sub }), tags.lastChild);
+      }
       buttons.forEach((b, i) => {
         if (i === q.a) b.classList.add("correct");
         else if (i === chosen) b.classList.add("wrong");
@@ -82,16 +140,19 @@ MQ.QuizCore = (function () {
       return fb;
     }
 
-    /** 50/50: dim two wrong options. */
+    /** 50/50: dim two wrong options. Refused while the options are hidden. */
     function fiftyFifty() {
+      if (gate) return false;
       const wrong = buttons.map((b, i) => i).filter(i => i !== q.a && !buttons[i].disabled);
       U.shuffle(wrong).slice(0, Math.min(2, wrong.length)).forEach(i => {
         buttons[i].disabled = true;
         buttons[i].classList.add("dimmed");
       });
+      return true;
     }
 
-    return { node, reveal, disable, buttons, fiftyFifty };
+    return { node, reveal, disable, buttons, fiftyFifty,
+             gated: () => !!gate, confidence: () => confidence, openChoices };
   }
 
   return { buildCard, KEYS };
@@ -132,6 +193,10 @@ MQ.Games.quiz = (function () {
        one question at a time, so once the run ends this log is the ONLY record
        of what was asked — there is no marked-up screen to go back to. */
     const log = [];
+    /* Read once per run, not per question: flipping the setting mid-run would
+       change the rules halfway through and make the calibration figures a
+       mixture of two different measurements. */
+    const recallOn = c.recallCheck !== false && S.data.settings.recallCheck !== false;
     let idx = 0, correct = 0, streak = 0, bestStreak = 0;
     let xpEarned = 0, coinsEarned = 0, lives = c.lives, doubled = false;
     let penalty = 0, shownAt = 0, rushed = 0, insightUsed = false;
@@ -151,6 +216,9 @@ MQ.Games.quiz = (function () {
 
     const stage = U.el("div");
     const puBar = buildPowerupBar();
+    // An optional line explaining how this particular run was assembled — the
+    // Review Queue uses it to say what is due and what is early.
+    if (c.note) shell.body.appendChild(U.el("div", { class: "run-note tiny muted", text: c.note }));
     shell.body.appendChild(stage);
     shell.body.appendChild(puBar.node);
 
@@ -187,6 +255,11 @@ MQ.Games.quiz = (function () {
       card = MQ.QuizCore.buildCard(q, {
         index: idx, total: c.totalTime ? 0 : questions.length,
         hideTopic: c.hideTopic,
+        /* Never on a clock. The recall check asks the student to stop and
+           actually work the answer out, and a timer turns that into a tax on
+           thinking — the two are pulling in opposite directions, so the timed
+           modes keep their arcade feel and the study modes do the studying. */
+        recallCheck: !c.totalTime && recallOn,
         onAnswer: (chosen, isCorrect, btn) => answer(q, chosen, isCorrect, btn)
       });
       stage.appendChild(card.node);
@@ -195,10 +268,18 @@ MQ.Games.quiz = (function () {
     }
 
     function answer(q, chosen, isCorrect, btn) {
+      const conf = card.confidence();
       const fb = card.reveal(chosen);
-      S.recordAnswer(q.topic, isCorrect, q.id);
+      S.recordAnswer(q.topic, isCorrect, q.id, conf);
+      /* A confident miss is the one worth naming out loud. The student thought
+         they knew it; saying so is what makes the correction land. */
+      if (conf === "sure" && !isCorrect) {
+        UI.toast({ icon: "💡", kind: "bad", ms: 4200,
+          text: "You were <b>sure</b> on that one — worth a proper look." });
+      }
       log.push({
         ok: isCorrect, id: q.id, topic: q.topic, label: "Q" + (log.length + 1),
+        confidence: conf,
         prompt: q.q, yours: q.choices[chosen], correct: q.choices[q.a], why: q.why
       });
 
@@ -297,6 +378,14 @@ MQ.Games.quiz = (function () {
       }
 
       function use(id, btn) {
+        /* Check BEFORE spending it. 50/50 removes two options, and there are
+           no options on screen yet — consuming the power-up to do nothing is
+           how a student loses one and blames the app. */
+        if (id === "fifty" && card && card.gated()) {
+          MQ.Sound.denied();
+          UI.toast({ icon: "✂️", kind: "bad", text: "Say how sure you are first — then 50/50 can cut the options." });
+          return;
+        }
         if (!S.usePowerup(id)) return;
         if (id === "fifty") {
           MQ.Sound.puFifty();

@@ -34,7 +34,10 @@ MQ.State = (function () {
     inventory: { fifty: 1, skip: 1, freeze: 0, shield: 0, double: 0, insight: 0, revive: 0 },
     owned: { themes: ["graph"], avatars: ["🧮", "📐"] },
     srs: {},
+    /* Missed questions on a spaced ladder — see scheduleReview(). */
     mistakes: [],
+    /* { sure: {n, right}, think: {...}, guess: {...} } — see recordCalibration(). */
+    calibration: {},
     bookmarks: [],
     achievements: {},
     history: {},
@@ -45,7 +48,7 @@ MQ.State = (function () {
        stored as a course id rather than a tier array so that a save written
        by a build with different tiers still restores to something valid. */
     settings: { sound: true, motion: true, volume: 0.8, difficulty: "standard", radians: true,
-                textScale: 1, course: null },
+                textScale: 1, course: null, recallCheck: true },
     /* The Toolbelt's typed working-out. Capped at 4 kB by the writer — a save
        file that can grow without bound is a save file that eventually blows
        the localStorage quota and takes the rest of the progress with it. */
@@ -240,7 +243,7 @@ MQ.State = (function () {
   const streakBonus = () => Math.min(5 + data.streak.count * 3, 60);
 
   /* ── answer recording ────────────────────────────────────── */
-  function recordAnswer(topic, isCorrect, questionId) {
+  function recordAnswer(topic, isCorrect, questionId, confidence) {
     data.stats.answered++;
     if (isCorrect) data.stats.correct++;
 
@@ -254,19 +257,99 @@ MQ.State = (function () {
       }
     }
 
-    if (questionId) {
-      const idx = data.mistakes.findIndex(x => x.id === questionId);
-      if (isCorrect) {
-        if (idx >= 0) { data.mistakes.splice(idx, 1); data.stats.mistakesFixed++; }
-      } else if (idx >= 0) {
-        data.mistakes[idx].misses++;
-        data.mistakes[idx].ts = Date.now();
-      } else {
-        data.mistakes.unshift({ id: questionId, topic, misses: 1, ts: Date.now() });
-        if (data.mistakes.length > 150) data.mistakes.pop();
+    if (questionId) scheduleReview(questionId, topic, isCorrect, confidence);
+    if (confidence) recordCalibration(confidence, isCorrect);
+    save();
+  }
+
+  /* ── the review queue ────────────────────────────────────────
+     This used to be a flat list of outstanding mistakes: get a question wrong,
+     it goes in; get it right ONCE, it comes straight back out. That encodes
+     "one successful retrieval means learned", which is the single thing the
+     retrieval-practice literature is most consistent about being false.
+     Durable learning needs SEVERAL successful retrievals, SPACED OUT — one
+     correct answer thirty seconds after reading the explanation mostly
+     measures working memory.
+
+     So a missed question now rides the same Leitner ladder the flashcards
+     already use (§ spaced repetition above), and only leaves the queue after
+     it has been recalled correctly across five separate, widening intervals.
+     `data.mistakes` keeps its name and shape so existing saves keep working;
+     entries written by an older build simply have no box yet and start at 1.
+
+     HYPERCORRECTION. An entry missed while the student said "I know it" is
+     flagged. A confident error is both the most damaging kind — it is a belief,
+     not a gap — and the most correctable: being wrong when you were sure is
+     surprising, and surprise is what makes the correction stick. Those come
+     back sooner and weigh more heavily in the draw. */
+  function reviewEntry(id) {
+    return (data.mistakes || []).find(m => m.id === id);
+  }
+
+  function scheduleReview(id, topic, isCorrect, confidence) {
+    const list = data.mistakes || (data.mistakes = []);
+    const idx = list.findIndex(m => m.id === id);
+    const rec = idx >= 0 ? list[idx] : null;
+
+    if (!rec) {
+      // Correct first time and not in the queue: nothing to schedule.
+      if (isCorrect) return;
+      list.unshift({ id, topic, misses: 1, ts: Date.now(), box: 1, reps: 0,
+                     due: U.dayKey(), hiConf: confidence === "sure" });
+      // Oldest-first eviction, as before. A queue that grows without bound is
+      // a queue nobody can ever clear.
+      if (list.length > 150) list.pop();
+      return;
+    }
+
+    rec.ts = Date.now();
+    rec.reps = (rec.reps || 0) + 1;
+    if (confidence === "sure" && !isCorrect) rec.hiConf = true;
+
+    if (!isCorrect) {
+      rec.misses = (rec.misses || 0) + 1;
+      rec.box = 1;                       // a lapse resets the ladder
+    } else {
+      if (!rec.box) data.stats.mistakesFixed++;   // migrated pre-ladder entry
+      else if (rec.box === 1) data.stats.mistakesFixed++;
+      rec.box = Math.min(5, (rec.box || 1) + 1);
+      if (rec.box >= 5) {                // graduated: out of the queue
+        list.splice(idx, 1);
+        return;
       }
     }
-    save();
+    const due = new Date();
+    due.setDate(due.getDate() + BOX_DAYS[rec.box]);
+    rec.due = U.dayKey(due);
+  }
+
+  /** Queue entries whose interval has elapsed, most-lapsed first. */
+  function dueReviews() {
+    const today = U.dayKey();
+    return (data.mistakes || [])
+      .filter(m => !m.due || U.daysBetween(m.due, today) >= 0)
+      .sort((a, b) => (b.hiConf ? 1 : 0) - (a.hiConf ? 1 : 0) || (b.misses || 0) - (a.misses || 0));
+  }
+
+  /* ── calibration ─────────────────────────────────────────────
+     How often "I know it" really means you know it. Kept as three counters
+     rather than a log: the readout only ever needs the rates, and a per-answer
+     history is save-file weight that buys nothing. */
+  function recordCalibration(confidence, isCorrect) {
+    const c = data.calibration || (data.calibration = {});
+    const k = c[confidence] || (c[confidence] = { n: 0, right: 0 });
+    k.n++;
+    if (isCorrect) k.right++;
+  }
+
+  /** [{ id, label, n, right, pct }] for the levels actually used. */
+  function calibration() {
+    const c = data.calibration || {};
+    return MQ.DATA.CONFIDENCE.map(lvl => {
+      const k = c[lvl.id] || { n: 0, right: 0 };
+      return { id: lvl.id, label: lvl.label, n: k.n, right: k.right,
+               pct: k.n ? Math.round((k.right / k.n) * 100) : null };
+    }).filter(x => x.n > 0);
   }
 
   function noteStreak(n) { if (n > data.stats.bestStreak) { data.stats.bestStreak = n; save(); } }
@@ -579,6 +662,7 @@ MQ.State = (function () {
     weekly, weeklyQuests, claimQuest, weekKey, QUEST_POOL,
     touchStreak, streakBonus,
     recordAnswer, noteStreak, bump, markMode, recordScore,
+    dueReviews, reviewEntry, calibration,
     toggleBookmark, isBookmarked,
     mastery, overallAccuracy,
     usePowerup, grantPowerup, ownsTheme, ownsAvatar,

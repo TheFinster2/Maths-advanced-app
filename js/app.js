@@ -6,7 +6,7 @@ window.MQ = window.MQ || {};
 /* Shown in Settings. "What version am I actually on?" has to be answerable,
    or an update problem cannot be diagnosed at all. Keep in step with CACHE
    in sw.js — the validator asserts they match. */
-MQ.VERSION = "1.4.0";
+MQ.VERSION = "1.5.0";
 
 (function () {
   const U = MQ.U, S = MQ.State, UI = MQ.UI;

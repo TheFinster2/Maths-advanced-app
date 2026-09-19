@@ -118,6 +118,26 @@ async function dismissModal(page, timeout) {
   }
 }
 
+/**
+ * Clear the recall check if it is up, so a test can reach the options.
+ *
+ * Untimed quiz modes hide the options behind a confidence tap (see
+ * MQ.DATA.CONFIDENCE). A test that clicks `.choice` straight away is not
+ * wrong — it is simulating a student who has already decided — but it has to
+ * pass the gate first, exactly as a student does. `level` picks which button,
+ * so a test can drive an honest "I know it" or a shrugging "No idea".
+ */
+async function passRecallGate(page, level) {
+  return page.evaluate(lvl => {
+    const gate = document.querySelector(".recall-gate");
+    if (!gate) return false;
+    const btn = gate.querySelector(".recall-" + (lvl || "think")) ||
+                gate.querySelector(".recall-btn");
+    btn.click();
+    return true;
+  }, level);
+}
+
 /** Set the save file to a known state before measuring anything. */
 async function seedSave(page, patch) {
   await page.evaluate(p => {
@@ -193,5 +213,5 @@ function reporter(title) {
   };
 }
 
-module.exports = { serve, launch, newPage, boot, goTo, waitFor, dismissModal,
+module.exports = { serve, launch, newPage, boot, goTo, waitFor, dismissModal, passRecallGate,
                    seedSave, quiesce, snapshot, assertNoOverflow, reporter, ROOT };

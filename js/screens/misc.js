@@ -165,6 +165,28 @@ MQ.Screens.settings = function (view) {
     ])
   ]));
 
+  /* ── how you practise ───────────────────────────────────────
+     Separated from Preferences because these change what the app DOES to your
+     learning, not how it looks or sounds. */
+  view.appendChild(U.el("h2", {}, [
+    document.createTextNode("Practice"),
+    U.el("span", { class: "h2-sub", text: "how questions are put in front of you" })
+  ]));
+  const practice = U.el("div", { class: "card" });
+  practice.appendChild(toggleRow("Recall check",
+    "In untimed modes, the options stay hidden until you say how sure you are. " +
+    "Generating the answer beats recognising one, and rating your confidence before " +
+    "you see the options is what makes the calibration figures on Progress mean anything.",
+    d.settings.recallCheck !== false, on => {
+      d.settings.recallCheck = on;
+      S.save();
+      MQ.Sound.equip();
+    }));
+  view.appendChild(practice);
+  view.appendChild(U.el("p", { class: "tiny muted", style: "margin-top:8px", text:
+    "Timed modes never ask — a clock turns thinking time into a penalty, so Rapid Fire, " +
+    "Survival and the Exam Bosses stay as they are." }));
+
   /* toggles */
   view.appendChild(U.el("h2", { text: "Preferences" }));
   const prefs = U.el("div", { class: "card" });

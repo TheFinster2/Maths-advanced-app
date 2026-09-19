@@ -154,6 +154,13 @@ const BREAKS = {
      memoised, tier-filtered list does not, so the app half-switches. */
   "tier-cache": ["js/core/bank.js",
     /MQ\.DATA\.onTierChange\(\(\) => \{ ALL = null; INDEX = null; \}\);/, ""],
+  /* The bug this whole scheduler replaced: one correct answer clears the
+     question. It looks identical from the outside. */
+  "one-and-done": ["js/core/state.js",
+    /rec\.box = Math\.min\(5, \(rec\.box \|\| 1\) \+ 1\);/, "rec.box = 5;"],
+  /* Blocked practice: draw the questions but never reorder them. */
+  "blocked": ["js/core/bank.js",
+    /if \(o\.interleave !== false\) chosen = interleave\(chosen\);/, ""],
   "minclean": ["js/core/expr.js",
     /if \(clean < minClean\) return \{ equal: false, reason: "undefined", clean \};/, ""]
 };
@@ -965,6 +972,148 @@ section("Answer review");
     "the results modal renders the review button");
   ok(/silent/.test(ui),
     "reopening the results after a review does not re-fire the celebration");
+}
+
+/* ── 11d. the learning mechanics ──────────────────────────────
+   Three claims the app now makes about how it teaches. Each is cheap to get
+   subtly wrong and impossible to notice from playing it, because every failure
+   mode still LOOKS like a working quiz.
+
+   Run BREAK=one-and-done or BREAK=blocked to confirm this section fails when
+   the scheduler or the interleaver is disabled. */
+section("Learning mechanics");
+{
+  const L = makeContext(["MA", "ME"]);
+  const S = L.MQ.State, B = L.MQ.Bank;
+  S.load();
+
+  /* ── spaced review ──────────────────────────────────────────
+     The defect this replaced: miss a question, get it right once thirty
+     seconds later, and it left the queue forever. That measures working
+     memory, not learning. */
+  const q = B.all().find(x => x.topic.startsWith("MA-"));
+  S.recordAnswer(q.topic, false, q.id, "sure");
+  let rec = S.reviewEntry(q.id);
+  ok(!!rec, "a missed question enters the review queue");
+  ok(rec && rec.box === 1, "at step 1 of the ladder", rec && "box " + rec.box);
+  ok(rec && rec.hiConf === true,
+    "and is flagged when the student said they were sure (hypercorrection)");
+
+  S.recordAnswer(q.topic, true, q.id, "sure");
+  rec = S.reviewEntry(q.id);
+  ok(!!rec, "ONE correct answer does NOT clear it — that is the whole point") &&
+    pass("a single correct recall no longer counts as learned");
+  ok(rec && rec.box === 2, "it advances one step instead", rec && "box " + rec.box);
+  ok(rec && rec.due && rec.due !== L.MQ.U.dayKey(),
+    "and is pushed into the future rather than re-asked today", rec && rec.due);
+
+  /* Null-safe from here: with the scheduler broken the entry is already gone,
+     and a crash would "fail" for the wrong reason — see the BREAK note at the
+     bottom of this file. */
+  const boxOf = id => (S.reviewEntry(id) || {}).box;
+  S.recordAnswer(q.topic, true, q.id);
+  ok(boxOf(q.id) === 3, "a third correct recall advances again", "box " + boxOf(q.id));
+  S.recordAnswer(q.topic, false, q.id);
+  ok(boxOf(q.id) === 1, "a lapse resets the ladder to step 1", "box " + boxOf(q.id));
+  for (let i = 0; i < 4; i++) S.recordAnswer(q.topic, true, q.id);
+  ok(!S.reviewEntry(q.id),
+    "five correct recalls across widening gaps graduate it out of the queue") &&
+    pass("the review ladder promotes, resets and graduates");
+
+  /* A question answered correctly first time was never a mistake. */
+  const fresh = B.all().find(x => x.id !== q.id);
+  S.recordAnswer(fresh.topic, true, fresh.id, "sure");
+  ok(!S.reviewEntry(fresh.id), "a question never missed is not put in the queue");
+
+  /* dueReviews() must respect the interval, or spacing is decorative. */
+  S.recordAnswer(fresh.topic, false, fresh.id);
+  S.recordAnswer(fresh.topic, true, fresh.id);       // box 2, due in 2 days
+  const dueIds = S.dueReviews().map(m => m.id);
+  ok(dueIds.indexOf(fresh.id) < 0,
+    "a question scheduled for the future is NOT due today") &&
+    pass("spacing is enforced, not just recorded");
+
+  /* ── interleaving ───────────────────────────────────────────
+     Rohrer et al. (2020): "no two consecutive problems require the same
+     strategy". Checked on a single-topic drill, which is where blocking
+     actually happens and where the sub-skill key has to do the work. */
+  /* Measured against the FLOOR, not against "looks shuffled". A plain random
+     shuffle of 15 questions over 7 sub-skills already averages only ~2 adjacent
+     repeats, so a loose tolerance passes with the interleaver deleted — which
+     is exactly what BREAK=blocked is for. The real claim is that the run hits
+     the best ORDER THE MULTISET ALLOWS: with `m` copies of the commonest skill
+     among `n` questions, no arrangement can do better than max(0, 2m-n-1). */
+  const floorFor = keys => {
+    const counts = {};
+    keys.forEach(k => { counts[k] = (counts[k] || 0) + 1; });
+    const m = Math.max.apply(null, Object.values(counts));
+    return Math.max(0, 2 * m - keys.length - 1);
+  };
+  const adjacentIn = keys => {
+    let n = 0;
+    for (let i = 1; i < keys.length; i++) if (keys[i] === keys[i - 1]) n++;
+    return n;
+  };
+
+  /* Averaged over repeated draws: one draw is a sample of a random process,
+     and a test that fails one run in twenty is a test people learn to re-run. */
+  let drillWorst = 0, drillSkills = 0, drillLen = 0;
+  for (let t = 0; t < 12; t++) {
+    const run = B.draw(15, { topics: ["MA-C2"] });
+    const keys = run.map(B.skillOf);
+    drillWorst = Math.max(drillWorst, adjacentIn(keys) - floorFor(keys));
+    drillSkills = new Set(keys).size;
+    drillLen = run.length;
+  }
+  ok(drillLen > 1, "a topic drill draws a run", drillLen + " questions");
+  ok(drillWorst === 0,
+    "a single-topic drill blocks the same sub-skill no more than the pool forces",
+    `worst run was ${drillWorst} above the floor, over ${drillSkills} sub-skills`) &&
+    pass("drills are interleaved by sub-skill", `${drillSkills} sub-skills, optimal order`);
+
+  /* A mixed draw is held to the same standard, and to the same KEY. The unit
+     is the sub-skill, not the topic: two consecutive MA-C2 questions are fine
+     when one is the product rule and the other is the chain rule, because
+     deciding which rule applies is the thing being trained. Asserting on the
+     topic instead would be demanding an alternation the design does not claim
+     and does not need. */
+  let mixedWorst = 0;
+  for (let t = 0; t < 12; t++) {
+    const keys = B.draw(20, {}).map(B.skillOf);
+    mixedWorst = Math.max(mixedWorst, adjacentIn(keys) - floorFor(keys));
+  }
+  ok(mixedWorst === 0, "a mixed run alternates sub-skills too",
+    mixedWorst + " above the floor at worst");
+
+  /* The interleaver must never lose or duplicate a question. */
+  const src = B.all().slice(0, 40);
+  const woven = B.interleave(src);
+  ok(woven.length === src.length && new Set(woven.map(x => x.id)).size === src.length,
+    "interleaving reorders without dropping or duplicating anything",
+    `${src.length} in, ${woven.length} out`);
+  const allSame = B.interleave(src.slice(0, 5).map(x => Object.assign({}, x, { topic: "MA-C2", sub: "One" })));
+  ok(allSame.length === 5,
+    "a pool with only one sub-skill still returns every question rather than stalling");
+
+  /* ── calibration ────────────────────────────────────────────
+     The Progress readout is only honest if the counters track the confidence
+     the student actually gave. */
+  const c0 = makeContext(["MA", "ME"]);
+  c0.MQ.State.load();
+  const cq = c0.MQ.Bank.all()[0];
+  c0.MQ.State.recordAnswer(cq.topic, true, cq.id, "sure");
+  c0.MQ.State.recordAnswer(cq.topic, false, cq.id, "sure");
+  c0.MQ.State.recordAnswer(cq.topic, true, cq.id, "guess");
+  const cal = c0.MQ.State.calibration();
+  const sure = cal.find(x => x.id === "sure");
+  ok(sure && sure.n === 2 && sure.right === 1 && sure.pct === 50,
+    "calibration counts what you claimed against what you got",
+    JSON.stringify(sure));
+  ok(cal.every(x => x.n > 0), "levels never used are left out of the readout");
+  ok(c0.MQ.DATA.CONFIDENCE.length === 3 &&
+     c0.MQ.DATA.confidenceOf("sure").weight > c0.MQ.DATA.confidenceOf("guess").weight,
+    "a confident miss outweighs a shrugged one in the queue") &&
+    pass("calibration is recorded per confidence level");
 }
 
 /* ── 12. the precache list ────────────────────────────────────

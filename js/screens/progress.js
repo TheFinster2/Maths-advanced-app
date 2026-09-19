@@ -66,27 +66,86 @@ MQ.Screens.progress = function (view) {
     view.appendChild(card);
   });
 
-  /* ── outstanding mistakes ── */
-  const mistakes = MQ.Bank.mistakeQuestions().slice(0, 8);
+  /* ── the review queue ────────────────────────────────────────
+     Two different numbers, and showing only one of them is how the queue stops
+     making sense: DUE is what to do today, IN THE QUEUE is what is still not
+     learnt. A question leaves only after five correct recalls across widening
+     gaps, so the second number falls slowly and that is the design working,
+     not the student failing. Say so, or it reads as a backlog you can never
+     clear. */
+  const dueCount = S.dueReviews().length;
+  const queued = (d.mistakes || []).length;
+  const preview = MQ.Bank.reviewQuestions(dueCount > 0).slice(0, 6);
+
   view.appendChild(U.el("h2", {}, [
-    document.createTextNode("Outstanding mistakes"),
-    U.el("span", { class: "h2-sub", text: d.mistakes.length + " total" })
+    document.createTextNode("Review queue"),
+    U.el("span", { class: "h2-sub", text: queued ? dueCount + " due · " + queued + " in the queue" : "empty" })
   ]));
-  if (!mistakes.length) {
+  if (!queued) {
     view.appendChild(U.el("div", { class: "card" }, [
-      U.el("p", { style: "margin:0", text: "Nothing outstanding. Answer something wrong and it will appear here." })
+      U.el("p", { style: "margin:0", text:
+        "Nothing queued. A question you miss lands here and comes back on a widening schedule — " +
+        "a day, then two, four, eight, sixteen — until you have recalled it right five times." })
     ]));
   } else {
-    mistakes.forEach(q => {
+    view.appendChild(U.el("div", { class: "card", style: "margin-bottom:10px" }, [
+      U.el("p", { class: "tiny muted", style: "margin:0", text: dueCount
+        ? dueCount + " ready now. The rest are deliberately waiting — the gap is what makes the " +
+          "recall stick, so bringing them forward would waste them."
+        : "Nothing due today. These are all ahead of schedule; coming back tomorrow is worth " +
+          "more than grinding them now." })
+    ]));
+    preview.forEach(q => {
+      const rec = S.reviewEntry(q.id) || {};
       view.appendChild(U.el("div", { class: "wrongq" }, [
         U.el("div", { class: "q math", html: U.math(q.q) }),
-        U.el("div", { class: "a math", html: "→ " + U.math(q.choices[q.a]) })
+        U.el("div", { class: "a math", html: "→ " + U.math(q.choices[q.a]) }),
+        U.el("div", { class: "tiny muted", style: "margin-top:4px", text:
+          "Step " + (rec.box || 1) + " of 5" +
+          (rec.misses > 1 ? " · missed " + rec.misses + "×" : "") +
+          (rec.hiConf ? " · you were sure on this one" : "") })
       ]));
     });
     view.appendChild(U.el("button", {
-      class: "btn btn-primary btn-block", text: "🩹 Rehab these now",
+      class: "btn btn-primary btn-block",
+      text: dueCount ? "🩹 Review the " + Math.min(dueCount, 15) + " due now" : "🩹 Work ahead anyway",
       on: { click: () => UI.go("/game/mistakes") }
     }));
+  }
+
+  /* ── calibration ─────────────────────────────────────────────
+     What "I know it" is actually worth. The gap between the label and the
+     percentage is the useful number: a student who is right 55% of the time
+     when certain is not short of practice, they are short of a way to tell
+     which of their beliefs are wrong — and that is the thing no amount of
+     re-reading fixes. */
+  const calib = S.calibration();
+  if (calib.length) {
+    const sure = calib.find(c => c.id === "sure");
+    view.appendChild(U.el("h2", {}, [
+      document.createTextNode("How well you know what you know"),
+      U.el("span", { class: "h2-sub", text: "recall check" })
+    ]));
+    const card = U.el("div", { class: "card" });
+    calib.forEach(c => {
+      card.appendChild(U.el("div", { class: "calib-row" }, [
+        U.el("div", { class: "calib-lbl", text: c.label }),
+        U.el("div", { class: "calib-bar" }, [U.el("i", { style: "width:" + c.pct + "%" })]),
+        U.el("div", { class: "calib-pct", text: c.pct + "% of " + c.n })
+      ]));
+    });
+    card.appendChild(U.el("p", { class: "tiny muted", style: "margin:10px 0 0", text:
+      !sure || sure.n < 10
+        ? "Answer a few more with the recall check on and this becomes meaningful."
+        : sure.pct >= 85
+          ? "Well calibrated — when you say you know it, you do. Trust that feeling in the exam."
+          : sure.pct >= 70
+            ? "Slightly overconfident. The ones you were sure about and still missed are the " +
+              "cheapest marks you will ever pick up."
+            : "You are markedly overconfident, and that is worth more than it sounds: it means " +
+              "your revision is being spent on things you already know. The queue is now " +
+              "prioritising the ones you were sure about." }));
+    view.appendChild(card);
   }
 
   /* ── achievements shortcut ── */

@@ -27,6 +27,7 @@ MQ.UI = (function () {
      draining playtime after you left the game. Accumulating is the only shape
      that is safe to call from more than one layer. */
   let cleanups = [];
+  let lastRoute = null;
 
   /** Runs below this accuracy earn no completion bonus at all. */
   const MIN_BONUS_ACCURACY = 0.5;
@@ -50,6 +51,18 @@ MQ.UI = (function () {
   function handleRoute() {
     const { name, args } = parseHash();
     const fn = routes[name] || routes.home;
+
+    /* A modal must never outlive the screen that opened it: sticky ones have no
+       backdrop dismiss and sit above the navbar, so one left over a different
+       screen is a dead end with no way out.
+
+       Only on a real route CHANGE, though. handleRoute() is also the app's
+       "redraw this screen in place" call — buying a crate opens its result
+       modal and then redraws the shop underneath it — and closing on every
+       call would shut those the instant they opened. */
+    const here = name + "/" + args.join("/");
+    if (here !== lastRoute) closeModal();
+    lastRoute = here;
 
     // Run every registered teardown. One throwing must not strand the others,
     // and must not block navigation.
@@ -401,12 +414,22 @@ MQ.UI = (function () {
     }
 
     return U.el("div", { class: "rev-item " + (it.ok ? "ok" : "no") }, [
+      /* The chips wrap; the star must not. Left as siblings they shared one
+         wrapping row, and a fourth chip pushed the star onto a line of its
+         own — so the control for "keep this one" ended up floating under the
+         labels looking like it belonged to nothing. */
       U.el("div", { class: "rev-head" }, [
         U.el("span", { class: "rev-mark", text: it.ok ? "✓" : "✗" }),
-        it.label ? U.el("span", { class: "chip", text: it.label }) : null,
-        it.topic ? U.el("span", { class: "chip", text: MQ.Bank.topicName(it.topic) }) : null,
-        it.topic ? tierChip(it.topic) : null,
-        U.el("div", { class: "spacer" }),
+        U.el("div", { class: "rev-chips" }, [
+          it.label ? U.el("span", { class: "chip", text: it.label }) : null,
+          /* A confident miss gets said out loud here too. In a list of fifteen
+             it is the one to look at first, and it does not look different
+             from a shrugged guess unless the sheet says so. */
+          conf(it) ? U.el("span", { class: "chip" + (it.confidence === "sure" && !it.ok ? " chip-warn" : ""),
+            text: conf(it).icon + " " + conf(it).label }) : null,
+          it.topic ? U.el("span", { class: "chip", text: MQ.Bank.topicName(it.topic) }) : null,
+          it.topic ? tierChip(it.topic) : null
+        ]),
         star
       ]),
       it.prompt ? U.el("div", { class: "rev-q math", html: U.math(it.prompt) }) : null,
@@ -414,6 +437,8 @@ MQ.UI = (function () {
       it.why ? U.el("div", { class: "rev-why math", html: U.math(it.why) }) : null
     ]);
   }
+
+  const conf = it => (it.confidence && MQ.DATA.confidenceOf ? MQ.DATA.confidenceOf(it.confidence) : null);
 
   function reviewRow(label, value, cls) {
     return U.el("div", { class: "rev-row " + cls }, [

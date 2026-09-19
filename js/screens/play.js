@@ -32,8 +32,8 @@ MQ.Screens.play = (function () {
       desc:"Base case, assumption, inductive step, conclusion — in order, with the algebra to match." },
     { id:"survival", icon:"💀", name:"Survival", colour:"#ff4d6d", tag:"Endless", minLevel:6,
       desc:"One life. The clock tightens and the questions get harder. How deep can you go?" },
-    { id:"mistakes", icon:"🩹", name:"Mistake Rehab", colour:"#ff6b81", tag:"Review", minLevel:1,
-      desc:"Only the questions you have got wrong, until you get them right." },
+    { id:"mistakes", icon:"🩹", name:"Review Queue", colour:"#ff6b81", tag:"Review", minLevel:1,
+      desc:"Questions you have missed, resurfaced on a spaced schedule until they stick." },
     { id:"starred", icon:"🔖", name:"Starred Questions", colour:"#ffd24a", tag:"Review", minLevel:1,
       desc:"The questions you starred mid-run, back for another look." }
   ];
@@ -167,11 +167,27 @@ MQ.Screens.play = (function () {
         });
 
       case "mistakes": {
-        const qs = MQ.Bank.mistakeQuestions();
-        if (!qs.length) return emptyState(view, "🎉", "Nothing to fix",
-          "You have no outstanding mistakes. Go and make some.");
+        /* Due first. Getting a question right ONCE no longer clears it — it
+           has to survive five widening intervals — so "due" and "outstanding"
+           are now different numbers and the empty state has to say which.
+
+           Nothing due is a real state and a good one, but dead-ending on it
+           would train the student to stop opening the queue. Offer the ahead-
+           of-schedule ones and label them honestly instead. */
+        const due = MQ.Bank.reviewQuestions(true);
+        const all = MQ.Bank.reviewQuestions(false);
+        if (!all.length) return emptyState(view, "🎉", "Nothing in the queue",
+          "Questions you miss land here and come back on a spaced schedule until they stick. " +
+          "You have not missed any yet.");
+        const early = !due.length;
         return MQ.Games.quiz.start(view, {
-          modeId: "quiz", title: "🩹 Mistake Rehab", questions: qs.slice(0, 15), adaptive: false
+          modeId: "quiz",
+          title: (early ? "🩹 Review Queue · ahead of schedule" : "🩹 Review Queue"),
+          note: early
+            ? "Nothing is due today — spacing works because of the gap, so these are early. " +
+              all.length + " still in the queue."
+            : due.length + " due today, out of " + all.length + " in the queue.",
+          questions: (early ? all : due).slice(0, 15), adaptive: false
         });
       }
 
