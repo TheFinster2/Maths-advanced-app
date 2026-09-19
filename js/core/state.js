@@ -271,9 +271,11 @@ MQ.State = (function () {
      correct answer thirty seconds after reading the explanation mostly
      measures working memory.
 
-     So a missed question now rides the same Leitner ladder the flashcards
-     already use (§ spaced repetition above), and only leaves the queue after
-     it has been recalled correctly across five separate, widening intervals.
+     So a missed question now rides a Leitner ladder of its own and only leaves
+     the queue after FIVE correct recalls: one in the session that missed it,
+     then across gaps of one, two, four and eight days. A correct answer before
+     the interval has elapsed earns nothing — see the promotion check below,
+     which is the part that makes any of this real.
      `data.mistakes` keeps its name and shape so existing saves keep working;
      entries written by an older build simply have no box yet and start at 1.
 
@@ -286,6 +288,15 @@ MQ.State = (function () {
     return (data.mistakes || []).find(m => m.id === id);
   }
 
+  /* Days until the next test, indexed by box. Box 1 is ZERO on purpose: a
+     question you have just missed should be re-tested before you leave, which
+     is successive relearning — reach the criterion once in the session, THEN
+     space it. Separate from the flashcards' BOX_DAYS because the ladders
+     graduate differently and sharing the array coupled two unrelated
+     schedules. */
+  const REVIEW_DAYS = [0, 0, 1, 2, 4, 8];
+  const REVIEW_STEPS = 5;
+
   function scheduleReview(id, topic, isCorrect, confidence) {
     const list = data.mistakes || (data.mistakes = []);
     const idx = list.findIndex(m => m.id === id);
@@ -296,9 +307,7 @@ MQ.State = (function () {
       if (isCorrect) return;
       list.unshift({ id, topic, misses: 1, ts: Date.now(), box: 1, reps: 0,
                      due: U.dayKey(), hiConf: confidence === "sure" });
-      // Oldest-first eviction, as before. A queue that grows without bound is
-      // a queue nobody can ever clear.
-      if (list.length > 150) list.pop();
+      evict(list);
       return;
     }
 
@@ -308,27 +317,72 @@ MQ.State = (function () {
 
     if (!isCorrect) {
       rec.misses = (rec.misses || 0) + 1;
-      rec.box = 1;                       // a lapse resets the ladder
-    } else {
-      if (!rec.box) data.stats.mistakesFixed++;   // migrated pre-ladder entry
-      else if (rec.box === 1) data.stats.mistakesFixed++;
-      rec.box = Math.min(5, (rec.box || 1) + 1);
-      if (rec.box >= 5) {                // graduated: out of the queue
-        list.splice(idx, 1);
-        return;
-      }
+      /* A lapse resets the ladder AND makes it due immediately. Pushing a
+         question you have just failed out to tomorrow — which is what
+         deriving the date from the box did — moves your worst material out of
+         today's queue precisely because it is your worst material. */
+      rec.box = 1;
+      rec.due = U.dayKey();
+      return;
+    }
+
+    /* PROMOTION REQUIRES THE INTERVAL TO HAVE ELAPSED. Without this check the
+       ladder is decorative: four correct answers in one sitting graduate a
+       question permanently, and the app has several ways to hand you the same
+       question twice in a session (the Review Queue's "work ahead" path,
+       Rapid Fire's endless top-up, a boss fight's repeated draws). Answering
+       it right again ten seconds after reading the explanation is not a
+       spaced retrieval and must not be scored as one.
+
+       Getting it right early is still good news — it just earns nothing. The
+       box and the date are left exactly where they were. */
+    if (!isDue(rec)) return;
+
+    if (rec.box === 1 || !rec.box) data.stats.mistakesFixed++;
+    rec.box = (rec.box || 1) + 1;
+    if (rec.box > REVIEW_STEPS) {        // survived the whole ladder
+      list.splice(idx, 1);
+      return;
     }
     const due = new Date();
-    due.setDate(due.getDate() + BOX_DAYS[rec.box]);
+    due.setDate(due.getDate() + REVIEW_DAYS[rec.box]);
     rec.due = U.dayKey(due);
   }
 
-  /** Queue entries whose interval has elapsed, most-lapsed first. */
+  const isDue = rec => !rec.due || U.daysBetween(rec.due, U.dayKey()) >= 0;
+
+  /* Cap the queue by dropping the entry you are CLOSEST to done with, not the
+     one that happens to be oldest. Evicting by insertion order deletes a
+     question you have failed seven times while certain to make room for one
+     you shrugged at once — silently throwing away the highest-value item in
+     the queue to keep the lowest. */
+  function evict(list) {
+    while (list.length > 150) {
+      let worst = 0;
+      for (let i = 1; i < list.length; i++) {
+        if (reviewPriority(list[i]) < reviewPriority(list[worst])) worst = i;
+      }
+      list.splice(worst, 1);
+    }
+  }
+
+  /** Higher means "keep this one". */
+  function reviewPriority(m) {
+    return (m.hiConf ? 100 : 0) + Math.min(50, (m.misses || 1) * 10) - (m.box || 1) * 5;
+  }
+
+  /** Queue entries whose interval has elapsed, most-overdue and worst first. */
   function dueReviews() {
     const today = U.dayKey();
     return (data.mistakes || [])
-      .filter(m => !m.due || U.daysBetween(m.due, today) >= 0)
-      .sort((a, b) => (b.hiConf ? 1 : 0) - (a.hiConf ? 1 : 0) || (b.misses || 0) - (a.misses || 0));
+      .filter(isDue)
+      /* Overdue first, then confident errors, then most-missed. A student
+         returning after a fortnight has a backlog, and working it in
+         insertion order means the two-week-old items stay two weeks old. */
+      .sort((a, b) =>
+        U.daysBetween(a.due || today, today) - U.daysBetween(b.due || today, today) ||
+        (b.hiConf ? 1 : 0) - (a.hiConf ? 1 : 0) ||
+        (b.misses || 0) - (a.misses || 0));
   }
 
   /* ── calibration ─────────────────────────────────────────────

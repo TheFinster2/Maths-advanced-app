@@ -174,20 +174,22 @@ MQ.Screens.play = (function () {
            Nothing due is a real state and a good one, but dead-ending on it
            would train the student to stop opening the queue. Offer the ahead-
            of-schedule ones and label them honestly instead. */
-        const due = MQ.Bank.reviewQuestions(true);
-        const all = MQ.Bank.reviewQuestions(false);
-        if (!all.length) return emptyState(view, "🎉", "Nothing in the queue",
+        const due = MQ.Bank.reviewQuestions(true, 15);
+        const all = MQ.Bank.reviewQuestions(false, 15);
+        const queued = (MQ.State.data.mistakes || []).length;
+        const dueTotal = MQ.State.dueReviews().length;
+        if (!queued) return emptyState(view, "🎉", "Nothing in the queue",
           "Questions you miss land here and come back on a spaced schedule until they stick. " +
           "You have not missed any yet.");
-        const early = !due.length;
+        const early = !dueTotal;
         return MQ.Games.quiz.start(view, {
           modeId: "quiz",
           title: (early ? "🩹 Review Queue · ahead of schedule" : "🩹 Review Queue"),
           note: early
-            ? "Nothing is due today — spacing works because of the gap, so these are early. " +
-              all.length + " still in the queue."
-            : due.length + " due today, out of " + all.length + " in the queue.",
-          questions: (early ? all : due).slice(0, 15), adaptive: false
+            ? "Nothing is due today — spacing works because of the gap, so these are early, " +
+              "and getting them right now will not advance them. " + queued + " still in the queue."
+            : dueTotal + " due today, out of " + queued + " in the queue.",
+          questions: early ? all : due, adaptive: false
         });
       }
 

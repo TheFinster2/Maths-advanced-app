@@ -209,16 +209,27 @@ MQ.Bank = (function () {
    * spaced interval has elapsed — which is what Review Queue draws first, and
    * what the Progress screen counts.
    */
-  function reviewQuestions(dueOnly) {
+  function reviewQuestions(dueOnly, limit) {
     const src = dueOnly ? MQ.State.dueReviews() : (MQ.State.data.mistakes || []);
-    return interleave(src.map(m => byId(m.id)).filter(Boolean)).map(shuffleChoices);
+    let qs = src.map(m => byId(m.id)).filter(Boolean);
+    /* TAKE THE TOP N FIRST, THEN interleave. Interleaving regroups by
+       sub-skill and drains the largest group first, so it only preserves
+       order WITHIN a group — run it over the whole queue and then slice, and
+       the scheduler's ranking (overdue, then confident errors, then
+       most-missed) is gone by the time the session is cut to fifteen.
+       Measured before this fix: 15 of the top 15 ranked entries became 8. */
+    if (limit) qs = qs.slice(0, limit);
+    return interleave(qs).map(shuffleChoices);
   }
 
   /** Kept as the old name for anything still asking for "mistakes". */
   const mistakeQuestions = () => reviewQuestions(false);
 
   function bookmarkedQuestions() {
-    return (MQ.State.data.bookmarks || []).map(byId).filter(Boolean).map(shuffleChoices);
+    // Interleaved like every other run. Starring ten trig-calculus questions
+    // and playing them back to back is blocked practice inside a review mode.
+    return interleave((MQ.State.data.bookmarks || []).map(byId).filter(Boolean))
+      .map(shuffleChoices);
   }
 
   function statsByTopic() {

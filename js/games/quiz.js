@@ -37,13 +37,18 @@ MQ.QuizCore = (function () {
       o.hideTopic ? U.el("span", { class: "chip", text: "???" })
                   : U.el("span", { class: "chip", text: MQ.Bank.topicName(q.topic) }),
       o.hideTopic ? null : MQ.UI.tierChip(q.topic),
-      /* The SUB-SKILL is withheld until the options are revealed. It names the
-         strategy — "Quotient rule" — and working out which strategy applies is
-         the entire thing interleaving trains; handing it over for free undoes
-         that. The app already treats this as hint-grade information: the
-         Insight power-up's whole function is to sell you q.sub. Showing it
-         beside a hidden question was giving that away for nothing. */
-      o.hideTopic || o.recallCheck ? null : U.el("span", { class: "chip", text: q.sub || "" }),
+      /* The SUB-SKILL is withheld until the answer is revealed — in EVERY mode,
+         not just the gated ones. It names the strategy ("Quotient rule"), and
+         working out which strategy applies is the entire thing interleaving
+         trains. Withholding it only behind the recall check still printed it
+         in Rapid Fire, Survival and five of the six bosses, where the
+         interleaver is carefully alternating product/quotient/chain rule and
+         the card was then naming which one to use — making the alternation
+         decorative in exactly the modes with no other support.
+
+         The app already prices this: the Insight power-up's whole function is
+         to sell you q.sub. */
+      null,
       U.el("span", { class: "chip", text: "★".repeat(q.diff || 1) }),
       star
     ]);
@@ -124,7 +129,7 @@ MQ.QuizCore = (function () {
       disable();           // ends showing a question with no answer on it
       // Now it can be named: the answer is on screen, so it is context rather
       // than a hint, and it is genuinely useful when reading the explanation.
-      if (o.recallCheck && !o.hideTopic && q.sub && !tags.querySelector(".js-sub")) {
+      if (!o.hideTopic && q.sub && tags.appendChild && !tags.querySelector(".js-sub")) {
         tags.insertBefore(U.el("span", { class: "chip js-sub", text: q.sub }), tags.lastChild);
       }
       buttons.forEach((b, i) => {
@@ -381,9 +386,14 @@ MQ.Games.quiz = (function () {
         /* Check BEFORE spending it. 50/50 removes two options, and there are
            no options on screen yet — consuming the power-up to do nothing is
            how a student loses one and blames the app. */
-        if (id === "fifty" && card && card.gated()) {
+        /* 50/50 needs options to cut, and Insight literally reveals q.sub —
+           the one fact the gate exists to withhold. Buying it mid-gate would
+           both defeat the generation attempt and contaminate the confidence
+           rating that has not been given yet. */
+        if ((id === "fifty" || id === "insight") && card && card.gated()) {
           MQ.Sound.denied();
-          UI.toast({ icon: "✂️", kind: "bad", text: "Say how sure you are first — then 50/50 can cut the options." });
+          UI.toast({ icon: id === "fifty" ? "✂️" : "🔍", kind: "bad",
+            text: "Say how sure you are first — this would give the method away." });
           return;
         }
         if (!S.usePowerup(id)) return;

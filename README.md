@@ -190,9 +190,21 @@ one replaced something the app used to do.
 
 ### The review queue — spaced, not one-shot
 
-Miss a question and it enters a queue on a Leitner ladder: **1, 2, 4, 8, 16
-days**. A correct recall moves it up a step, a lapse resets it to the bottom,
-and it only graduates out after **five** correct recalls across widening gaps.
+Miss a question and it enters a queue on a Leitner ladder. It comes back
+**once more in the same session**, then after **1, 2, 4 and 8 days**. A lapse
+resets it to the bottom and makes it due immediately; it graduates out after
+**five** correct recalls.
+
+Two rules make that real rather than decorative:
+
+- **A correct answer before the interval has elapsed earns no promotion.**
+  Several paths can hand you the same question twice in a sitting — a boss
+  fight redraws from one topic group, Rapid Fire tops its pool up — and
+  answering it again ten seconds after reading the explanation is not a spaced
+  retrieval. It is still good news; it just does not move the box.
+- **A lapse is due immediately, not tomorrow.** Deriving the date from the box
+  pushed a question you had *just failed* out of today's queue, so the harder
+  you found something the less likely you were to see it again that day.
 
 This replaced a flat list of outstanding mistakes that cleared the moment you
 got a question right once. That encoded "one successful retrieval means

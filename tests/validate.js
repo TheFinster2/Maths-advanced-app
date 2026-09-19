@@ -157,7 +157,10 @@ const BREAKS = {
   /* The bug this whole scheduler replaced: one correct answer clears the
      question. It looks identical from the outside. */
   "one-and-done": ["js/core/state.js",
-    /rec\.box = Math\.min\(5, \(rec\.box \|\| 1\) \+ 1\);/, "rec.box = 5;"],
+    /rec\.box = \(rec\.box \|\| 1\) \+ 1;/, "rec.box = REVIEW_STEPS + 1;"],
+  /* Spacing that records dates but never enforces them: the ladder can then
+     be climbed to graduation inside a single session. */
+  "no-spacing": ["js/core/state.js", /if \(!isDue\(rec\)\) return;/, ""],
   /* Blocked practice: draw the questions but never reorder them. */
   "blocked": ["js/core/bank.js",
     /if \(o\.interleave !== false\) chosen = interleave\(chosen\);/, ""],
@@ -999,23 +1002,50 @@ section("Learning mechanics");
   ok(rec && rec.hiConf === true,
     "and is flagged when the student said they were sure (hypercorrection)");
 
-  S.recordAnswer(q.topic, true, q.id, "sure");
-  rec = S.reviewEntry(q.id);
-  ok(!!rec, "ONE correct answer does NOT clear it — that is the whole point") &&
-    pass("a single correct recall no longer counts as learned");
-  ok(rec && rec.box === 2, "it advances one step instead", rec && "box " + rec.box);
-  ok(rec && rec.due && rec.due !== L.MQ.U.dayKey(),
-    "and is pushed into the future rather than re-asked today", rec && rec.due);
+  /* Box 1 is due immediately — successive relearning: reach the criterion once
+     in this session, THEN space it. */
+  ok(rec && rec.due === L.MQ.U.dayKey(), "and is due once more in the same session");
 
-  /* Null-safe from here: with the scheduler broken the entry is already gone,
-     and a crash would "fail" for the wrong reason — see the BREAK note at the
-     bottom of this file. */
   const boxOf = id => (S.reviewEntry(id) || {}).box;
+  S.recordAnswer(q.topic, true, q.id, "sure");
+  ok(!!S.reviewEntry(q.id), "ONE correct answer does NOT clear it — that is the whole point") &&
+    pass("a single correct recall no longer counts as learned");
+  ok(boxOf(q.id) === 2, "it advances one step instead", "box " + boxOf(q.id));
+  /* Null-safe throughout this block: with the scheduler broken the entry is
+     already gone, and a crash "fails" for the wrong reason. */
+  const dueOf = id => (S.reviewEntry(id) || {}).due;
+  ok(!!dueOf(q.id) && dueOf(q.id) !== L.MQ.U.dayKey(),
+    "and is now pushed into the future", dueOf(q.id));
+
+  /* ── the promotion guard ────────────────────────────────────
+     THE check that makes spacing real rather than decorative. Several paths
+     hand the same question back inside one session — a boss fight redraws
+     from one topic group, Rapid Fire tops up its pool, the Review Queue's
+     "work ahead" path serves not-due entries. Before this guard, four correct
+     answers in one sitting graduated a question permanently. */
+  const beforeEarly = JSON.stringify(S.reviewEntry(q.id));
+  for (let i = 0; i < 6; i++) S.recordAnswer(q.topic, true, q.id, "sure");
+  ok(JSON.stringify(S.reviewEntry(q.id)) === beforeEarly ||
+     boxOf(q.id) === 2,
+    "answering it right again BEFORE it is due does not promote it",
+    "box " + boxOf(q.id) + " after six early correct answers") &&
+    pass("the ladder cannot be climbed in one sitting");
+
+  /* Time travel: the only way to test a day-scale schedule in a unit test is
+     to move the due date, which is exactly the state a returning student has. */
+  const makeDue = id => { const r = S.reviewEntry(id); if (r) r.due = "2000-01-01"; };
+
+  makeDue(q.id);
   S.recordAnswer(q.topic, true, q.id);
-  ok(boxOf(q.id) === 3, "a third correct recall advances again", "box " + boxOf(q.id));
+  ok(boxOf(q.id) === 3, "once the interval HAS elapsed it advances", "box " + boxOf(q.id));
+
   S.recordAnswer(q.topic, false, q.id);
   ok(boxOf(q.id) === 1, "a lapse resets the ladder to step 1", "box " + boxOf(q.id));
-  for (let i = 0; i < 4; i++) S.recordAnswer(q.topic, true, q.id);
+  ok(dueOf(q.id) === L.MQ.U.dayKey(),
+    "and a lapse is due IMMEDIATELY, not pushed to tomorrow", dueOf(q.id)) &&
+    pass("failing a question brings it closer, never further away");
+
+  for (let i = 0; i < 5; i++) { makeDue(q.id); S.recordAnswer(q.topic, true, q.id); }
   ok(!S.reviewEntry(q.id),
     "five correct recalls across widening gaps graduate it out of the queue") &&
     pass("the review ladder promotes, resets and graduates");
@@ -1027,11 +1057,60 @@ section("Learning mechanics");
 
   /* dueReviews() must respect the interval, or spacing is decorative. */
   S.recordAnswer(fresh.topic, false, fresh.id);
-  S.recordAnswer(fresh.topic, true, fresh.id);       // box 2, due in 2 days
+  S.recordAnswer(fresh.topic, true, fresh.id);       // box 2, due tomorrow
   const dueIds = S.dueReviews().map(m => m.id);
   ok(dueIds.indexOf(fresh.id) < 0,
     "a question scheduled for the future is NOT due today") &&
     pass("spacing is enforced, not just recorded");
+
+  /* ── the queue cap keeps the right entries ──────────────────
+     Evicting by insertion order deleted a question failed seven times while
+     certain, to make room for one shrugged at once. */
+  const cap = makeContext(["MA", "ME"]);
+  cap.MQ.State.load();
+  const capPool = cap.MQ.Bank.all();
+  const precious = capPool[0];
+  cap.MQ.State.data.mistakes = [{ id: precious.id, topic: precious.topic, misses: 7,
+    ts: 1, box: 1, reps: 0, due: cap.MQ.U.dayKey(), hiConf: true }];
+  for (let i = 1; i < 200; i++) cap.MQ.State.recordAnswer(capPool[i].topic, false, capPool[i].id);
+  ok(!!cap.MQ.State.reviewEntry(precious.id),
+    "the queue cap keeps your worst question and drops an easier one",
+    "queue is " + cap.MQ.State.data.mistakes.length) &&
+    pass("eviction is by priority, not by age");
+
+  /* ── the session must keep the scheduler's ranking ──────────
+     reviewQuestions() interleaves, which regroups by sub-skill; running that
+     over the whole queue and slicing afterwards threw the ranking away. */
+  const rank = makeContext(["MA", "ME"]);
+  rank.MQ.State.load();
+  const rp = rank.MQ.Bank.all();
+  const urgent = rp.filter(x => x.topic === "MA-C4").slice(0, 20);
+  const rest = rp.filter(x => x.topic !== "MA-C4").slice(0, 40);
+  rank.MQ.State.data.mistakes = urgent
+    .map(x => ({ id: x.id, topic: x.topic, misses: 5, ts: 1, box: 1, reps: 0,
+                 due: rank.MQ.U.dayKey(), hiConf: true }))
+    .concat(rest.map(x => ({ id: x.id, topic: x.topic, misses: 1, ts: 1, box: 1, reps: 0,
+                             due: rank.MQ.U.dayKey(), hiConf: false })));
+  const servedIds = rank.MQ.Bank.reviewQuestions(true, 15).map(x => x.id);
+  const kept = servedIds.filter(id => (rank.MQ.State.reviewEntry(id) || {}).hiConf).length;
+  ok(kept === 15,
+    "a 15-question session is the 15 the scheduler ranked highest",
+    kept + " of 15 were high-priority") &&
+    pass("interleaving reorders the session without re-ranking it");
+
+  /* Starred questions are a review mode too, and were served fully blocked. */
+  const bm = makeContext(["MA", "ME"]);
+  bm.MQ.State.load();
+  const t2 = bm.MQ.Bank.all().filter(x => x.topic === "MA-T2").slice(0, 10);
+  bm.MQ.State.data.bookmarks = t2.map(x => x.id);
+  const bk = bm.MQ.Bank.bookmarkedQuestions().map(bm.MQ.Bank.skillOf);
+  let bkAdj = 0;
+  for (let i = 1; i < bk.length; i++) if (bk[i] === bk[i - 1]) bkAdj++;
+  const bkCounts = {};
+  bk.forEach(k => { bkCounts[k] = (bkCounts[k] || 0) + 1; });
+  const bkFloor = Math.max(0, 2 * Math.max.apply(null, Object.values(bkCounts)) - bk.length - 1);
+  ok(bkAdj <= bkFloor, "the starred deck is interleaved like any other run",
+    `${bkAdj} adjacent repeats, floor is ${bkFloor}`);
 
   /* ── interleaving ───────────────────────────────────────────
      Rohrer et al. (2020): "no two consecutive problems require the same

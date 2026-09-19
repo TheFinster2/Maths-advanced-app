@@ -98,7 +98,22 @@ MQ.Screens.study = (function () {
       return;
     }
 
-    const cards = U.sample(pool, Math.min(20, pool.length));
+    /* MOST OVERDUE FIRST, not a random twenty. A uniform sample of a backlog
+       works it in random order: the same cards resurface across sessions while
+       others are never drawn at all, and a student with 90 cards due can
+       review 20 a day for a week without clearing the oldest. Cards that have
+       never been seen sort last — they are not late, they are new, and an
+       existing card that is actually overdue has the stronger claim. */
+    const today = U.dayKey();
+    const cards = pool.slice()
+      .sort((a, b) => overdueBy(b) - overdueBy(a))
+      .slice(0, 20);
+
+    function overdueBy(card) {
+      const c = S.data.srs[card.id];
+      return c ? U.daysBetween(c.due, today) : -1;
+    }
+
     S.markMode("study");
     S.touchStreak();
 

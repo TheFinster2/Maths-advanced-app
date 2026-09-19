@@ -85,15 +85,16 @@ MQ.Screens.progress = function (view) {
     view.appendChild(U.el("div", { class: "card" }, [
       U.el("p", { style: "margin:0", text:
         "Nothing queued. A question you miss lands here and comes back on a widening schedule — " +
-        "a day, then two, four, eight, sixteen — until you have recalled it right five times." })
+        "once more this session, then after a day, two, four and eight — until you have " +
+        "recalled it right five times." })
     ]));
   } else {
     view.appendChild(U.el("div", { class: "card", style: "margin-bottom:10px" }, [
       U.el("p", { class: "tiny muted", style: "margin:0", text: dueCount
         ? dueCount + " ready now. The rest are deliberately waiting — the gap is what makes the " +
           "recall stick, so bringing them forward would waste them."
-        : "Nothing due today. These are all ahead of schedule; coming back tomorrow is worth " +
-          "more than grinding them now." })
+        : "Nothing due today. These are all ahead of schedule, so answering them now will not " +
+          "advance them — coming back tomorrow is worth more than grinding them today." })
     ]));
     preview.forEach(q => {
       const rec = S.reviewEntry(q.id) || {};
@@ -108,7 +109,8 @@ MQ.Screens.progress = function (view) {
     });
     view.appendChild(U.el("button", {
       class: "btn btn-primary btn-block",
-      text: dueCount ? "🩹 Review the " + Math.min(dueCount, 15) + " due now" : "🩹 Work ahead anyway",
+      text: dueCount ? "🩹 Review the " + Math.min(dueCount, 15) + " due now"
+                     : "🩹 Look at them anyway (no credit)",
       on: { click: () => UI.go("/game/mistakes") }
     }));
   }
