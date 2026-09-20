@@ -303,6 +303,24 @@ const PORT = 8821;
     R.ok(await page.evaluate(() => !document.querySelector(".tb-reveal")),
       "outside a run nothing is hidden behind a reveal");
 
+    /* ── a new student's first deck is not blocked ──────────────
+       Every unseen card ties on "how overdue", so sorting alone is a no-op
+       and a stable sort hands back the deck FILE in order: ten "Exact values"
+       cards in a row, identical every session. That is the blocked practice
+       the question bank goes to some trouble to avoid, in the one mode a
+       beginner is most likely to open first. */
+    R.section("Flashcard ordering");
+    await H.goTo(page, "/study/deck/all");
+    await page.waitForTimeout(250);
+    const deckRun = await page.evaluate(() => (window.MQ.__current || {}).decks || []);
+    R.ok(deckRun.length >= 10, "a study session is built", deckRun.length + " cards");
+    let deckAdj = 0;
+    for (let i = 1; i < deckRun.length; i++) if (deckRun[i] === deckRun[i - 1]) deckAdj++;
+    R.ok(deckAdj <= 4, "a new student's cards are not served deck-by-deck",
+      deckAdj + " adjacent same-deck pairs in " + deckRun.length + ": " + deckRun.slice(0, 6).join(", "));
+    R.ok(new Set(deckRun).size >= 5, "and span several decks",
+      new Set(deckRun).size + " distinct decks");
+
     /* ── reviewing answers after a run ──────────────────────────
        The complaint this answers: you fill in a table, hit submit, the results
        overlay covers the marked-up board, and its only exits both throw the
@@ -315,10 +333,11 @@ const PORT = 8821;
     await H.goTo(page, "/game/drill/MA-C2");
     await page.waitForTimeout(300);
     for (let i = 0; i < 15; i++) {
+      // Vary the confidence, so the review sheet and the calibration counters
+      // both see more than one level.
+      await H.passRecallGate(page, i % 3 === 0 ? "sure" : i % 3 === 1 ? "think" : "guess");
       const label = await page.evaluate(n => {
         const a = window.MQ.__current.answer;
-        const gate = document.querySelector(".recall-gate");
-        if (gate) gate.querySelector(".recall-btn").click();
         const btns = [...document.querySelectorAll(".choice")].filter(b => !b.disabled);
         if (!btns.length) return "done";
         btns[n % 2 === 0 ? a : (a + 1) % btns.length].click();

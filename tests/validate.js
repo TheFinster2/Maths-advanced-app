@@ -158,9 +158,16 @@ const BREAKS = {
      question. It looks identical from the outside. */
   "one-and-done": ["js/core/state.js",
     /rec\.box = \(rec\.box \|\| 1\) \+ 1;/, "rec.box = REVIEW_STEPS + 1;"],
+  /* An unbraced multi-letter subscript, as it actually shipped. */
+  "subscript": ["js/data/formulas.js",
+    /tex:"S_\{\\\\infty\} = /, 'tex:"S_inf = '],
   /* Spacing that records dates but never enforces them: the ladder can then
      be climbed to graduation inside a single session. */
   "no-spacing": ["js/core/state.js", /if \(!isDue\(rec\)\) return;/, ""],
+  /* The backlog served from the wrong end: compiles, reads fine, quietly
+     serves the least urgent fifteen. */
+  "backlog-order": ["js/core/state.js",
+    /overdueBy\(b\) - overdueBy\(a\) \|\|/, "overdueBy(a) - overdueBy(b) ||"],
   /* Blocked practice: draw the questions but never reorder them. */
   "blocked": ["js/core/bank.js",
     /if \(o\.interleave !== false\) chosen = interleave\(chosen\);/, ""],
@@ -977,6 +984,40 @@ section("Answer review");
     "reopening the results after a review does not re-fire the celebration");
 }
 
+/* ── 11e. subscripts that are not subscripts ──────────────────
+   `S_inf` renders as "S subscript i" followed by a literal "nf" — the
+   renderer is right, the source was wrong. It shipped in six places
+   including the text of a question, so a student was shown an incorrect
+   formula on the flashcard, the formula sheet, the reference library and
+   mid-run. A multi-letter subscript needs braces: S_{\infty}, not S_inf.
+
+   Single letters and digits are fine unbraced (T_n, a_1) and are by far the
+   common case, so this only flags runs of two or more. */
+section("Subscripts");
+{
+  const BAD = /(^|[^\\A-Za-z0-9}])([A-Za-z])_([A-Za-z]{2,})/g;
+  const offenders = [];
+  const scan = (label, str) => {
+    if (typeof str !== "string") return;
+    let m;
+    BAD.lastIndex = 0;
+    while ((m = BAD.exec(str))) offenders.push(label + ": " + m[2] + "_" + m[3]);
+  };
+
+  MQ.Bank.all().forEach(q => {
+    scan(q.id, q.q); scan(q.id, q.why);
+    (q.choices || []).forEach(c => scan(q.id, c));
+  });
+  MQ.DATA.flashcards.forEach(c => { scan(c.id, c.q); scan(c.id, c.a); });
+  MQ.DATA.formulas.forEach(f => { scan(f.id, f.tex); scan(f.id, f.hint); });
+  MQ.DATA.reference.forEach(r => r.rows.forEach(row => row.forEach(cell => scan(r.id, cell))));
+
+  ok(offenders.length === 0,
+    "every multi-letter subscript is braced — S_{\\infty}, never S_inf",
+    offenders.slice(0, 6).join(", ")) &&
+    pass("subscripts render as subscripts");
+}
+
 /* ── 11d. the learning mechanics ──────────────────────────────
    Three claims the app now makes about how it teaches. Each is cheap to get
    subtly wrong and impossible to notice from playing it, because every failure
@@ -1173,6 +1214,82 @@ section("Learning mechanics");
   const allSame = B.interleave(src.slice(0, 5).map(x => Object.assign({}, x, { topic: "MA-C2", sub: "One" })));
   ok(allSame.length === 5,
     "a pool with only one sub-skill still returns every question rather than stalling");
+
+  /* ── the backlog is worked from the right end ───────────────
+     daysBetween(due, today) is days OVERDUE, so the sort has to be
+     descending. Ascending compiles, reads plausibly, and quietly serves the
+     least urgent fifteen — the oldest items are never reached at all. */
+  const back = makeContext(["MA", "ME"]);
+  back.MQ.State.load();
+  const bp = back.MQ.Bank.all();
+  back.MQ.State.data.mistakes = bp.slice(0, 40).map((x, i) => ({
+    id: x.id, topic: x.topic, misses: 1, ts: 1, box: 1, reps: 0,
+    due: "2026-01-" + String((i % 28) + 1).padStart(2, "0"), hiConf: false
+  }));
+  const order = back.MQ.State.dueReviews().map(m => m.due);
+  ok(order[0] <= order[order.length - 1],
+    "the review backlog is served most-overdue first",
+    "first " + order[0] + ", last " + order[order.length - 1]) &&
+    pass("the oldest items are the ones you actually get");
+
+  /* ── corrupt fields must not delete or wedge an entry ───────
+     Boxes and dates come out of a save file, so they come from anywhere. A
+     string box became "11" on the next promotion and tripped the graduation
+     test, silently deleting four scheduled reviews; a bad date wrote
+     "NaN-NaN-NaN" and the entry was never due again. */
+  const junk = makeContext(["MA", "ME"]);
+  junk.MQ.State.load();
+  const jp = junk.MQ.Bank.all();
+  const cases = [
+    ["box as a string", { box: "1" }],
+    ["a negative box", { box: -3 }],
+    ["a fractional box", { box: 1.7 }],
+    ["an unparseable due date", { due: "soon" }],
+    ["a numeric due date", { due: 1234567890 }]
+  ];
+  const wedged = [];
+  cases.forEach(([label, patch], i) => {
+    const qq = jp[i + 10];
+    junk.MQ.State.data.mistakes = [Object.assign(
+      { id: qq.id, topic: qq.topic, misses: 1, ts: 1, box: 1, reps: 0,
+        due: junk.MQ.U.dayKey(), hiConf: false }, patch)];
+    junk.MQ.State.recordAnswer(qq.topic, true, qq.id);
+    const r = junk.MQ.State.reviewEntry(qq.id);
+    if (!r) wedged.push(label + " → DELETED");
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.due))) wedged.push(label + " → due " + r.due);
+    else if (!(r.box >= 1 && r.box <= 5)) wedged.push(label + " → box " + r.box);
+  });
+  ok(wedged.length === 0,
+    "a corrupt box or date is repaired, not allowed to delete or wedge the entry",
+    wedged.join("; ")) && pass("the scheduler survives a damaged save");
+
+  /* ── one "fixed" credit per question per day ────────────────
+     A lapse is due immediately, which is right, so without a daily cap an
+     alternating wrong/right tap on ONE question farmed the rehab
+     achievements in under a minute. */
+  const farm = makeContext(["MA", "ME"]);
+  farm.MQ.State.load();
+  const fq = farm.MQ.Bank.all()[3];
+  for (let i = 0; i < 25; i++) {
+    farm.MQ.State.recordAnswer(fq.topic, false, fq.id);
+    farm.MQ.State.recordAnswer(fq.topic, true, fq.id);
+  }
+  ok(farm.MQ.State.data.stats.mistakesFixed <= 1,
+    "alternating wrong/right on one question cannot farm the rehab count",
+    "credited " + farm.MQ.State.data.stats.mistakesFixed + " times in 25 cycles") &&
+    pass("a fix counts once per question per day");
+
+  /* ── a null must not clobber a default subtree ──────────────
+     {"xp":0,"settings":null} passed importSave's only check, latched the
+     save, and reloaded into a blank screen: app.js throws before the routes
+     or the settings button exist, so Reset is unreachable. */
+  const nul = makeContext(["MA", "ME"]);
+  const bad = nul.MQ.State.importSave(JSON.stringify({ xp: 0, settings: null, profile: null }));
+  ok(bad.ok, "a save with null sections still imports");
+  ok(nul.MQ.State.data.settings && typeof nul.MQ.State.data.settings === "object",
+    "and a null section falls back to the default rather than bricking the app",
+    JSON.stringify(nul.MQ.State.data.settings)) &&
+    pass("importing a damaged save cannot leave the app unreachable");
 
   /* ── calibration ────────────────────────────────────────────
      The Progress readout is only honest if the counters track the confidence

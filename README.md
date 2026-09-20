@@ -380,11 +380,11 @@ which is the only thing stopping the toggle from rotting.
 ## Testing
 
 ```bash
-node tests/validate.js     # 189 checks — content, no browser needed, run this constantly
-node tests/smoke.js        # 104 checks — every screen and mode, zero console errors
+node tests/validate.js     # 210 checks — content, no browser needed, run this constantly
+node tests/smoke.js        # 107 checks — every screen and mode, zero console errors
 node tests/align.js        #  15 checks — where the maths actually lands on the line
 node tests/calc.js         #  31 checks — the calculator, and that it never raises a keyboard
-node tests/exploit.js      #  30 checks — the farming bot AND the honest player
+node tests/exploit.js      #  31 checks — the farming bot AND the honest player
 node tests/arcade.js       #  27 checks — the arcade provably earns nothing
 node tests/offline.js      #  32 checks — subpath, offline, and PWA update handling
 ```
@@ -428,7 +428,7 @@ BREAK=answer-first node tests/validate.js
 
 This deletes a specific guard with a regex, checks the patched file still
 parses, and then asserts the suite **fails**. A test that passes with its fix
-removed is worthless. Ten guards are covered:
+removed is worthless. Fourteen guards are covered:
 
 | `BREAK=` | The guard it deletes |
 |---|---|
@@ -437,6 +437,9 @@ removed is worthless. Ten guards are covered:
 | `tier-cache` | Switching course drops every memoised, tier-filtered list |
 | `one-and-done` | A missed question needs FIVE spaced recalls, not one, to clear |
 | `blocked` | Draws are reordered so consecutive questions need different skills |
+| `no-spacing` | A promotion requires the interval to have actually elapsed |
+| `backlog-order` | The review backlog is served most-overdue first |
+| `subscript` | Multi-letter subscripts are braced, so they render as subscripts |
 | `escape` | The renderer escapes HTML *before* substituting |
 | `domain` | Equivalence checking respects a declared domain |
 | `minclean` | Equivalence requires enough defined sample points |

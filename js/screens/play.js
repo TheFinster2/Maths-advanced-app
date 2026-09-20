@@ -54,7 +54,11 @@ MQ.Screens.play = (function () {
       const best = S.data.scores[g.id === "drill" || g.id === "mistakes" || g.id === "starred" ? "quiz" : g.id];
       const card = U.el("button", {
         class: "game-card" + (locked ? " locked" : ""),
-        style: `--gc:${g.colour}`, disabled: locked
+        /* NOT `disabled`. A disabled button swallows the tap, so a padlocked
+           card did nothing at all when tapped — no modal, no toast, no hint
+           that a level gate even existed. Silence reads as "broken", which is
+           a worse answer than "not yet". */
+        style: `--gc:${g.colour}`
       }, [
         U.el("div", { class: "game-ico", text: g.icon }),
         U.el("div", { class: "game-name", text: g.name }),
@@ -66,7 +70,16 @@ MQ.Screens.play = (function () {
           locked ? U.el("span", { class: "chip lock-tag", text: "🔒 Lv " + g.minLevel }) : null
         ])
       ]);
-      if (!locked) card.addEventListener("click", () => { MQ.Sound.click(); UI.go("/game/" + g.id); });
+      card.addEventListener("click", () => {
+        if (locked) {
+          MQ.Sound.denied();
+          return UI.toast({ icon: "🔒", kind: "bad", ms: 3200,
+            text: "<b>" + U.escapeHtml(g.name) + "</b> unlocks at level " + g.minLevel +
+                  " — you are level " + lvl + "." });
+        }
+        MQ.Sound.click();
+        UI.go("/game/" + g.id);
+      });
       grid.appendChild(card);
     });
     view.appendChild(grid);
@@ -82,7 +95,7 @@ MQ.Screens.play = (function () {
       const beaten = !!S.data.bossesBeaten[boss.id];
       const card = U.el("button", {
         class: "game-card" + (unlocked ? "" : " locked"),
-        style: "--gc:#ff6b81", disabled: !unlocked
+        style: "--gc:#ff6b81"
       }, [
         U.el("div", { class: "game-ico", text: boss.icon }),
         U.el("div", { class: "game-name", text: boss.name }),
@@ -95,7 +108,14 @@ MQ.Screens.play = (function () {
                  : !unlocked ? U.el("span", { class: "chip lock-tag", text: "🔒 Locked" }) : null
         ])
       ]);
-      if (unlocked) card.addEventListener("click", () => UI.go("/game/boss/" + boss.id));
+      card.addEventListener("click", () => {
+        if (!unlocked) {
+          MQ.Sound.denied();
+          return UI.toast({ icon: "🔒", kind: "bad", ms: 3200,
+            text: "Defeat the boss before <b>" + U.escapeHtml(boss.name) + "</b> to unlock it." });
+        }
+        UI.go("/game/boss/" + boss.id);
+      });
       bossGrid.appendChild(card);
     });
     view.appendChild(bossGrid);
@@ -120,7 +140,11 @@ MQ.Screens.play = (function () {
       const credit = MQ.Arcade.timeLeft(g.id);
       const card = U.el("button", {
         class: "game-card" + (locked ? " locked" : ""),
-        style: `--gc:${g.colour}`, disabled: locked
+        /* NOT `disabled`. A disabled button swallows the tap, so a padlocked
+           card did nothing at all when tapped — no modal, no toast, no hint
+           that a level gate even existed. Silence reads as "broken", which is
+           a worse answer than "not yet". */
+        style: `--gc:${g.colour}`
       }, [
         U.el("div", { class: "game-ico", text: g.icon }),
         U.el("div", { class: "game-name", text: g.name }),
@@ -131,7 +155,14 @@ MQ.Screens.play = (function () {
           locked ? U.el("span", { class: "chip lock-tag", text: "🔒 Lv " + g.minLevel }) : null
         ])
       ]);
-      if (!locked) card.addEventListener("click", () => UI.go("/arcade/" + g.id));
+      card.addEventListener("click", () => {
+        if (locked) {
+          MQ.Sound.denied();
+          return UI.toast({ icon: "🔒", kind: "bad", ms: 3200,
+            text: "<b>" + U.escapeHtml(g.name) + "</b> unlocks at level " + g.minLevel + "." });
+        }
+        UI.go("/arcade/" + g.id);
+      });
       arcadeGrid.appendChild(card);
     });
     view.appendChild(arcadeGrid);
@@ -174,13 +205,24 @@ MQ.Screens.play = (function () {
            Nothing due is a real state and a good one, but dead-ending on it
            would train the student to stop opening the queue. Offer the ahead-
            of-schedule ones and label them honestly instead. */
+        /* Guard on what actually RESOLVED, not on what is in the save file.
+           reviewQuestions() looks ids up through the course-filtered bank, so
+           a queue full of Extension questions after switching to Advanced —
+           or ids a later build renamed — resolves to nothing while the save
+           still counts them. The old guard passed, `questions: []` reached
+           quiz.start(), and its `c.questions && c.questions.length` fell
+           through to a random draw: the student got twelve questions from
+           topics they had never missed, labelled as their review session. */
         const due = MQ.Bank.reviewQuestions(true, 15);
         const all = MQ.Bank.reviewQuestions(false, 15);
-        const queued = (MQ.State.data.mistakes || []).length;
-        const dueTotal = MQ.State.dueReviews().length;
+        const queued = all.length;
+        const dueTotal = due.length ? MQ.State.dueReviews().length : 0;
         if (!queued) return emptyState(view, "🎉", "Nothing in the queue",
-          "Questions you miss land here and come back on a spaced schedule until they stick. " +
-          "You have not missed any yet.");
+          ((MQ.State.data.mistakes || []).length
+            ? "The questions in your queue are not part of the course you are studying — " +
+              "switch back in Settings to pick them up again."
+            : "Questions you miss land here and come back on a spaced schedule until they stick. " +
+              "You have not missed any yet."));
         const early = !dueTotal;
         return MQ.Games.quiz.start(view, {
           modeId: "quiz",
@@ -233,7 +275,23 @@ MQ.Screens.play = (function () {
       "15 adaptive questions. The app favours the ones you have missed before." }));
 
     const stats = MQ.Bank.statsByTopic();
-    const grid = U.el("div", { class: "grid g2", style: "margin-top:14px" });
+
+    /* FIRST, not last. The blurb promises "the app favours the ones you have
+       missed before" and then demanded one of 24 topics from a student who by
+       definition does not know which is weakest. The mixed option existed —
+       at the bottom of a 3900 px page, which is the same as not existing. */
+    const weak = MQ.Bank.weakestTopic();
+    view.appendChild(U.el("div", { class: "grid", style: "margin-top:14px" }, [
+      U.el("button", { class: "btn btn-primary btn-block", text: "🎲 Mixed — let the app choose",
+        on: { click: () => UI.go("/game/rapid") } }),
+      weak ? U.el("button", { class: "btn btn-block",
+        text: "🎯 My weakest: " + weak.short + " (" + weak.mastery + "%)",
+        on: { click: () => UI.go("/game/drill/" + weak.id) } }) : null
+    ]));
+    view.appendChild(U.el("p", { class: "tiny muted", style: "margin:12px 0 2px",
+      text: "…or pick a topic yourself:" }));
+
+    const grid = U.el("div", { class: "grid g2", style: "margin-top:6px" });
 
     MQ.DATA.TIERS.forEach(tier => {
       const meta = MQ.DATA.TIER_META[tier];
@@ -255,10 +313,6 @@ MQ.Screens.play = (function () {
       });
     });
 
-    grid.appendChild(U.el("div", { style: "grid-column:1/-1" }, [
-      U.el("button", { class: "btn btn-ghost btn-block", text: "Mixed — every topic",
-        on: { click: () => UI.go("/game/rapid") } })
-    ]));
     view.appendChild(grid);
   }
 

@@ -128,7 +128,7 @@ async function dismissModal(page, timeout) {
  * so a test can drive an honest "I know it" or a shrugging "No idea".
  */
 async function passRecallGate(page, level) {
-  return page.evaluate(lvl => {
+  const hit = await page.evaluate(lvl => {
     const gate = document.querySelector(".recall-gate");
     if (!gate) return false;
     const btn = gate.querySelector(".recall-" + (lvl || "think")) ||
@@ -136,6 +136,15 @@ async function passRecallGate(page, level) {
     btn.click();
     return true;
   }, level);
+  if (!hit) return false;
+  /* The options are deliberately inert for a moment after the gate clears, so
+     the second half of a double-tap cannot answer the question. A test has to
+     wait that out exactly as a student does — polled, not slept, so the
+     duration can change without silently breaking every caller. */
+  await waitFor(page, () =>
+    [...document.querySelectorAll(".choice")].some(b => !b.disabled),
+    { label: "options enabled after the recall gate", timeout: 3000 });
+  return true;
 }
 
 /** Set the save file to a known state before measuring anything. */

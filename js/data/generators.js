@@ -495,7 +495,7 @@ MQ.Gen = (function () {
       return { params:{a,r,S},
         prompt:`A GP has a = ${U.fmtNum(a)} and r = ${U.fmtNum(r)}. Find its limiting sum.`,
         answerType:"number", tol:0.001,
-        why:`S_inf = \\frac{a}{1-r} = \\frac{${U.fmtNum(a)}}{${U.fmtNum(1-r)}}. This exists only because |r| < 1.` };
+        why:`S_{\\infty} = \\frac{a}{1-r} = \\frac{${U.fmtNum(a)}}{${U.fmtNum(1-r)}}. This exists only because |r| < 1.` };
     },
     solve(p) { return p.a / (1 - p.r); }});
 

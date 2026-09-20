@@ -84,7 +84,7 @@ MQ.DATA.flashcards = [
 {id:"fc-m-02",topic:"MA-M1",deck:"Sequences",q:"Sum of an AP",a:"S_n = \\frac{n}{2}(2a + (n-1)d) = \\frac{n}{2}(a+l)"},
 {id:"fc-m-03",topic:"MA-M1",deck:"Sequences",q:"nth term of a GP",a:"T_n = ar^{n-1}"},
 {id:"fc-m-04",topic:"MA-M1",deck:"Sequences",q:"Sum of a GP",a:"S_n = \\frac{a(r^n - 1)}{r - 1}"},
-{id:"fc-m-05",topic:"MA-M1",deck:"Sequences",q:"Limiting sum of a GP, and when it exists",a:"S_inf = \\frac{a}{1-r}, valid only for |r| < 1"},
+{id:"fc-m-05",topic:"MA-M1",deck:"Sequences",q:"Limiting sum of a GP, and when it exists",a:"S_{\\infty} = \\frac{a}{1-r}, valid only for |r| < 1"},
 {id:"fc-m-06",topic:"MA-M1",deck:"Finance",q:"Compound interest",a:"A = P(1+r)^n"},
 {id:"fc-m-07",topic:"MA-M1",deck:"Finance",q:"Future value of an annuity",a:"FV = M\\frac{(1+r)^n - 1}{r}"},
 {id:"fc-m-08",topic:"MA-M1",deck:"Finance",q:"Reducing-balance loan recurrence",a:"A_n = A_{n-1}(1+r) - M"},

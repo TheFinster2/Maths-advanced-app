@@ -12,15 +12,31 @@ MQ.Screens.study = (function () {
 
   function picker(view) {
     const due = S.dueCards();
+    /* Two different numbers — see State.dueCardReviews(). Everything unseen is
+       "due" to a study session but is not a BACKLOG, and opening the app to
+       "137 cards due" before you have studied anything is discouraging and
+       untrue. */
+    const revs = S.dueCardReviews().length;
+    const fresh = due.length - revs;
     view.appendChild(U.el("h1", { text: "Study" }));
+    const total = MQ.Cards.all().length;
+    const plural = (n, word) => `<b>${n}</b> ${word}${n === 1 ? "" : "s"}`;
     view.appendChild(U.el("p", { html:
-      `<b>${due.length}</b> card${due.length === 1 ? "" : "s"} due today across ` +
-      `${MQ.Cards.all().length} in the deck. Cards resurface exactly when you are about to forget them.` }));
+      (revs
+        ? plural(revs, "card") + " due for review" +
+          (fresh ? `, and ${fresh} you have not seen yet.` : ` out of ${total}.`)
+        : fresh === total
+          ? plural(total, "card") + " in here, none seen yet — start anywhere."
+          : plural(fresh, "card") + ` still to learn, out of ${total}.`) +
+      " Cards resurface exactly when you are about to forget them." }));
 
     view.appendChild(U.el("button", {
       class: "btn btn-primary btn-block", style: "margin-top:12px",
       disabled: !due.length,
-      text: due.length ? `🗂️ Review ${Math.min(due.length, 20)} due cards` : "Nothing due — come back tomorrow",
+      text: due.length
+        ? (revs ? `🗂️ Review ${Math.min(revs, 20)} due card${Math.min(revs, 20) === 1 ? "" : "s"}`
+                : `🗂️ Learn ${Math.min(fresh, 20)} new card${Math.min(fresh, 20) === 1 ? "" : "s"}`)
+        : "Nothing due — come back tomorrow",
       on: { click: () => UI.go("/study/deck/all") }
     }));
 
@@ -55,7 +71,8 @@ MQ.Screens.study = (function () {
       }).length;
       const card = U.el("button", { class: "game-card", style: "--gc:var(--glow-b)" }, [
         U.el("div", { class: "game-name", text: name }),
-        U.el("div", { class: "game-desc", text: cards.length + " cards" }),
+        U.el("div", { class: "game-desc",
+          text: cards.length + (cards.length === 1 ? " card" : " cards") }),
         U.el("div", { class: "game-foot" }, [
           dueHere ? U.el("span", { class: "chip on", text: dueHere + " due" })
                   : U.el("span", { class: "chip", text: "up to date" })
@@ -105,15 +122,28 @@ MQ.Screens.study = (function () {
        never been seen sort last — they are not late, they are new, and an
        existing card that is actually overdue has the stronger claim. */
     const today = U.dayKey();
-    const cards = pool.slice()
+    /* Overdue first, and SHUFFLED within a tie. Sorting alone is a no-op for a
+       new student — every card is unseen, every key ties, and a stable sort
+       then hands back the deck file in order: ten "Exact values" cards in a
+       row, identical every session. That is precisely the blocked practice
+       Bank.interleave() exists to prevent, so the tie-break matters as much as
+       the sort. */
+    const cards = U.shuffle(pool.slice())
       .sort((a, b) => overdueBy(b) - overdueBy(a))
       .slice(0, 20);
 
     function overdueBy(card) {
       const c = S.data.srs[card.id];
-      return c ? U.daysBetween(c.due, today) : -1;
+      if (!c) return -1;                       // never seen: not late, just new
+      const n = U.daysBetween(c.due, today);
+      return isFinite(n) ? n : 0;
     }
 
+    /* Test hook, same rationale as the one in ui.js: the session is built once
+       and shown one card at a time, so the ORDER it chose is not observable
+       from the DOM. tests/smoke.js asserts on this that a new student's deck
+       is not served in file order. */
+    MQ.__current = { kind: "cards", decks: cards.map(c => c.deck), ids: cards.map(c => c.id) };
     S.markMode("study");
     S.touchStreak();
 

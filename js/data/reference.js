@@ -101,7 +101,7 @@ MQ.DATA.reference = [
    ["*AP: sum","S_n = \\frac{n}{2}(2a + (n-1)d) = \\frac{n}{2}(a+l)"],
    ["*GP: nth term","T_n = ar^{n-1}"],
    ["*GP: sum","S_n = \\frac{a(r^n - 1)}{r - 1}"],
-   ["*GP: limiting sum (|r| < 1)","S_inf = \\frac{a}{1-r}"],
+   ["*GP: limiting sum (|r| < 1)","S_{\\infty} = \\frac{a}{1-r}"],
    ["*Compound interest","A = P(1+r)^n"],
    ["Future value of an annuity","FV = M\\frac{(1+r)^n - 1}{r}"],
    ["Present value of an annuity","PV = M\\frac{1 - (1+r)^{-n}}{r}"],

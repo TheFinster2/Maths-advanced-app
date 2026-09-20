@@ -20,24 +20,53 @@ MQ.Screens.progress = function (view) {
     document.createTextNode("Last 12 weeks"),
     U.el("span", { class: "h2-sub", text: "XP per day" })
   ]));
+  /* Columns are WEEKS and rows are weekdays, like every contribution graph
+     worth reading. The grid was auto-filling to whatever fitted — about 20
+     columns — which wrapped 84 days into four ragged rows where neither axis
+     meant anything: you could not find "last Tuesday" or "three weeks ago",
+     so it was texture rather than data.
+
+     Built column-major and laid out with grid-auto-flow:column so the DOM
+     order stays chronological (which is what a screen reader gets) while the
+     visual grid reads top-to-bottom within a week, left-to-right across
+     weeks. The last column ends today, so the final partial week is at the
+     right-hand edge where it belongs. */
   const heat = U.el("div", { class: "heat" });
   const today = new Date();
+  // Back up to the most recent Monday so every column is a whole week.
+  const offsetToMonday = (today.getDay() + 6) % 7;
   const values = [];
-  for (let i = 83; i >= 0; i--) {
+  for (let i = offsetToMonday + 77; i >= 0; i--) {
     const day = new Date(today);
     day.setDate(day.getDate() - i);
-    values.push({ key: U.dayKey(day), xp: d.history[U.dayKey(day)] || 0 });
+    values.push({ key: U.dayKey(day), xp: d.history[U.dayKey(day)] || 0, dow: (day.getDay() + 6) % 7 });
   }
   const peak = Math.max(1, ...values.map(v => v.xp));
   values.forEach(v => {
     const lv = v.xp === 0 ? 0 : Math.min(4, Math.ceil((v.xp / peak) * 4));
     heat.appendChild(U.el("div", { class: "heat-day", data: { lv: String(lv) },
+      style: "grid-row:" + (v.dow + 1),
       title: `${v.key}: ${v.xp} XP` }));
   });
-  view.appendChild(U.el("div", { class: "card" }, [heat]));
+  view.appendChild(U.el("div", { class: "card" }, [
+    heat,
+    U.el("div", { class: "tiny muted", style: "margin-top:8px",
+      text: "One column per week, Monday at the top. This week is on the right." })
+  ]));
 
   /* ── mastery, every topic, grouped by tier ── */
-  view.appendChild(U.el("h2", { text: "Mastery by topic" }));
+  view.appendChild(U.el("h2", {}, [
+    document.createTextNode("Mastery by topic"),
+    U.el("span", { class: "h2-sub", text: "accuracy × how much you have seen" })
+  ]));
+  /* "10/15 correct … 40%" reads as a bug unless the screen says why. Mastery
+     is confidence-weighted: a perfect three-question run is not mastery, so
+     the percentage is held down until the sample is big enough to mean
+     something. Home said so; the screen actually showing the number did not. */
+  view.appendChild(U.el("p", { class: "tiny muted", style: "margin:-6px 0 10px", text:
+    "Mastery is not your raw score — it is scaled by how many questions you have " +
+    "attempted, so it climbs as you build a track record rather than jumping to " +
+    "100% after three lucky answers." }));
   const stats = MQ.Bank.statsByTopic();
   MQ.DATA.TIERS.forEach(tier => {
     const rows = stats.filter(t => t.tier === tier);

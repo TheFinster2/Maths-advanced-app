@@ -118,7 +118,7 @@ MQ.DATA.formulas = [
  tex:"S_n = \\frac{a(r^n - 1)}{r - 1} = \\frac{a(1 - r^n)}{1 - r}, \\quad r != 1",
  hint:"Use whichever form keeps the denominator positive."},
 {id:"f-gp-inf",g:"series", tier:"MA", nesa:true,  name:"Geometric: limiting sum",
- tex:"S_inf = \\frac{a}{1-r}, \\quad |r| < 1",
+ tex:"S_{\\infty} = \\frac{a}{1-r}, \\quad |r| < 1",
  hint:"The condition is part of the formula. Without |r|<1 there is no limiting sum."},
 {id:"f-ci",    g:"series", tier:"MA", nesa:true,  name:"Compound interest",
  tex:"A = P(1+r)^n",

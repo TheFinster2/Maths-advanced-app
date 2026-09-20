@@ -6,7 +6,7 @@ window.MQ = window.MQ || {};
 /* Shown in Settings. "What version am I actually on?" has to be answerable,
    or an update problem cannot be diagnosed at all. Keep in step with CACHE
    in sw.js — the validator asserts they match. */
-MQ.VERSION = "1.5.0";
+MQ.VERSION = "1.6.0";
 
 (function () {
   const U = MQ.U, S = MQ.State, UI = MQ.UI;
@@ -82,14 +82,50 @@ MQ.VERSION = "1.5.0";
      reason the toggle is worth having: defaulting an Advanced-only student
      into Extension 1 content buries them in vectors and induction on day one,
      and they have no way of knowing the setting exists to turn it off. */
-  if (S.data.stats.answered === 0 && Object.keys(S.data.history).length === 0) {
-    setTimeout(welcome, 900);
-  }
+  /* Immediately, not on a delay. A 900 ms timer let the home screen paint and
+     become tappable first, so the student's first interaction with the app was
+     a full-screen modal stealing a tap they had already committed to. */
+  if (S.data.stats.answered === 0 && Object.keys(S.data.history).length === 0) welcome();
 
+  /* The course question is the whole modal, and it is ASKED rather than
+     defaulted. Pre-highlighting the current course highlighted the build
+     default — the widest one — so a student who tapped straight past the
+     question was silently enrolled in Extension 1: 629 questions instead of
+     424, twelve extra topics in the drill picker, and vectors and induction in
+     their revision. That is the exact outcome the comment above says must not
+     happen, and a pre-selected button is how it happened.
+
+     Nothing else is on screen until it is answered, which also fixes the
+     second problem: the feature list pushed the only exit below the fold on a
+     844 px phone, so the button that starts the app needed a scroll to reach. */
   function welcome() {
     const courses = MQ.DATA.availableCourses();
-    const ext = MQ.DATA.hasExt();
 
+    if (courses.length < 2) return welcomeIntro();    // nothing to ask
+
+    UI.modal(U.el("div", { class: "modal-center" }, [
+      U.el("div", { class: "modal-big", text: "∫" }),
+      U.el("h2", { style: "justify-content:center", text: "Which course are you doing?" }),
+      U.el("p", { class: "muted", text:
+        "This decides what you are shown. You can change it any time in Settings." }),
+      U.el("div", { class: "grid", style: "margin:18px 0 6px" }, courses.map(c =>
+        U.el("button", { class: "btn btn-block", style: "text-align:left; padding:14px 16px" }, [
+          U.el("div", { style: "font-weight:800; font-size:15px", text: c.icon + "  " + c.name }),
+          U.el("div", { class: "tiny muted", style: "margin-top:3px; white-space:normal", text: c.desc })
+        ])
+      ).map((btn, i) => {
+        btn.addEventListener("click", () => {
+          S.setCourse(courses[i].id);
+          MQ.Sound.equip();
+          welcomeIntro();
+        });
+        return btn;
+      }))
+    ]), { sticky: true });
+  }
+
+  function welcomeIntro() {
+    const ext = MQ.DATA.hasExt();
     UI.modal(U.el("div", { class: "modal-center" }, [
       U.el("div", { class: "modal-big", text: "∫" }),
       U.el("h2", { style: "justify-content:center", text: "Welcome to MathQuest" }),
@@ -98,32 +134,11 @@ MQ.VERSION = "1.5.0";
         (ext ? "Advanced and Extension 1" : "Advanced") + "</b>. " +
         "Answer questions to earn XP and <b>Primes</b> 🔢, level up, unlock themes, " +
         "and take down the " + (ext ? "six" : "five") + " Exam Bosses." }),
-
-      // One course means an Advanced-only build: nothing to ask.
-      courses.length > 1 ? U.el("div", { style: "text-align:left; margin:16px 0" }, [
-        U.el("div", { style: "font-weight:800; font-size:13.5px; margin-bottom:8px",
-          text: "Which course are you doing?" }),
-        U.el("div", { class: "row" }, courses.map(c => U.el("button", {
-          class: "btn" + (MQ.DATA.course().id === c.id ? " btn-primary" : ""),
-          style: "flex:1; min-width:130px",
-          text: c.icon + " " + c.name,
-          on: { click: () => {
-            if (S.setCourse(c.id)) MQ.Sound.equip();
-            welcome();   // redraw: the copy and the counts below all move with it
-          } }
-        }))),
-        U.el("div", { class: "tiny muted", style: "margin-top:6px",
-          text: MQ.DATA.course().desc + " You can change this later in Settings." })
-      ]) : null,
-
-      U.el("div", { class: "grid", style: "text-align:left; margin:16px 0" }, [
-        bullet("🎮", (ext ? "Thirteen" : "Eleven") + " game modes",
-          "Quizzes, an algebra checker, a calculus lab, proof puzzles" +
-          (ext ? ", projectile motion" : "") + " and more."),
+      U.el("div", { class: "grid", style: "text-align:left; margin:14px 0" }, [
+        bullet("🎯", "It works out what you need",
+          "Questions you miss come back on a widening schedule until they stick."),
         bullet("🔢", "Questions that never run out",
-          MQ.Gen.enabled().length + " generators build fresh numeric problems every time."),
-        bullet("🗂️", "Spaced repetition", "Flashcards resurface exactly when you are about to forget them."),
-        bullet("🎯", "Adaptive", "Topics you miss come back more often until they stick.")
+          MQ.Gen.enabled().length + " generators build fresh numeric problems every time.")
       ]),
       U.el("button", {
         class: "btn btn-primary btn-block", text: "Let's differentiate",

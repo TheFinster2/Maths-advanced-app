@@ -78,6 +78,13 @@ MQ.State = (function () {
   }
 
   function deepMerge(base, override) {
+    /* A null override must NOT replace a structured default. `{"xp":0,
+       "settings":null}` passed importSave's only check, latched the save, and
+       reloaded into a blank screen: app.js throws at applyCourse() before the
+       routes are registered and before the settings button is wired, so the
+       student is left with an inert nav bar and no way to reach Reset. Keeping
+       the default for a null is both safer and what every caller wants. */
+    if (override === null && base !== null && typeof base === "object") return base;
     if (Array.isArray(base)) return Array.isArray(override) ? override : base;
     if (base && typeof base === "object" && override && typeof override === "object") {
       const out = Object.assign({}, base);
@@ -338,8 +345,14 @@ MQ.State = (function () {
        box and the date are left exactly where they were. */
     if (!isDue(rec)) return;
 
-    if (rec.box === 1 || !rec.box) data.stats.mistakesFixed++;
-    rec.box = (rec.box || 1) + 1;
+    /* At most one "fixed" credit per question per day. A lapse makes an entry
+       due immediately (which is right), so without this an alternating
+       wrong/right tap on a single question farmed the Self-Correcting and
+       Nothing Sticks achievements in under a minute. */
+    const today = U.dayKey();
+    if (rec.fixedDay !== today) { data.stats.mistakesFixed++; rec.fixedDay = today; }
+
+    rec.box = boxOf(rec) + 1;
     if (rec.box > REVIEW_STEPS) {        // survived the whole ladder
       list.splice(idx, 1);
       return;
@@ -349,7 +362,46 @@ MQ.State = (function () {
     rec.due = U.dayKey(due);
   }
 
-  const isDue = rec => !rec.due || U.daysBetween(rec.due, U.dayKey()) >= 0;
+  /* A date we cannot parse counts as DUE. Treating it as not-due meant a
+     single corrupt field wedged an entry forever: never due, so never
+     promoted, so never graduated, occupying a queue slot until the cap
+     evicted it. Due-when-unsure is self-healing — the next correct answer
+     rewrites the date with a good one. */
+  const isDue = rec => {
+    if (!rec.due) return true;
+    const n = U.daysBetween(rec.due, U.dayKey());
+    return !isFinite(n) || n >= 0;
+  };
+
+  /* Boxes arrive from the save file, so they arrive from anywhere. A string
+     "1" turned into "11" on the next promotion and tripped the graduation
+     test, silently deleting the entry and its four remaining reviews; a
+     negative or fractional box indexed REVIEW_DAYS out of bounds and wrote
+     the literal string "NaN-NaN-NaN" as a due date. */
+  const boxOf = rec => {
+    const n = Math.round(Number(rec.box));
+    return isFinite(n) && n >= 1 ? Math.min(n, REVIEW_STEPS) : 1;
+  };
+
+  /**
+   * True when answering this question right NOW would be a genuine spaced
+   * recovery: it is in the queue, its interval has elapsed, and it has already
+   * survived at least one overnight gap.
+   *
+   * Asked BEFORE recordAnswer, because recording it changes the answer.
+   *
+   * This is what the app pays a premium for, and the `box >= 2` clause is what
+   * makes that safe. Box 2 is only ever set with a due date at least a day
+   * out, so a recovery cannot be manufactured inside a session: you cannot
+   * miss a question and "recover" it minutes later, however many times you
+   * try. Paying for a same-session fix would have been a farm worth thousands
+   * of XP an hour — miss, correct, repeat — which is why the premium is
+   * attached to the day gap rather than to the mode you happen to be in.
+   */
+  function isSpacedRecovery(id) {
+    const rec = reviewEntry(id);
+    return !!rec && boxOf(rec) >= 2 && isDue(rec);
+  }
 
   /* Cap the queue by dropping the entry you are CLOSEST to done with, not the
      one that happens to be oldest. Evicting by insertion order deletes a
@@ -374,13 +426,22 @@ MQ.State = (function () {
   /** Queue entries whose interval has elapsed, most-overdue and worst first. */
   function dueReviews() {
     const today = U.dayKey();
+    const overdueBy = m => {
+      const n = U.daysBetween(m.due || today, today);
+      return isFinite(n) ? n : 0;
+    };
     return (data.mistakes || [])
       .filter(isDue)
       /* Overdue first, then confident errors, then most-missed. A student
          returning after a fortnight has a backlog, and working it in
          insertion order means the two-week-old items stay two weeks old. */
+      /* daysBetween(due, today) is days OVERDUE, so this is descending: the
+         most overdue first. Ascending — which is what this said — worked the
+         backlog from the wrong end, and since the session only takes the top
+         15 the oldest items were never reached at all. A 21-day-overdue
+         confident error sorted dead last. */
       .sort((a, b) =>
-        U.daysBetween(a.due || today, today) - U.daysBetween(b.due || today, today) ||
+        overdueBy(b) - overdueBy(a) ||
         (b.hiConf ? 1 : 0) - (a.hiConf ? 1 : 0) ||
         (b.misses || 0) - (a.misses || 0));
   }
@@ -424,11 +485,20 @@ MQ.State = (function () {
     save();
   }
 
+  /**
+   * Record a mode score. Returns true only for a genuine personal BEST.
+   *
+   * The first run of a mode sets the baseline and is not a best — you cannot
+   * beat a record that does not exist. Treating `undefined` as beatable put a
+   * gold "🏅 New personal best!" on a first run of 0 out of 15, next to grade
+   * D and "Rough run", which is the worst possible moment to be congratulated
+   * and empties the badge of meaning everywhere else.
+   */
   function recordScore(modeId, score) {
     const prev = data.scores[modeId];
-    const isBest = prev === undefined || score > prev;
-    if (isBest) { data.scores[modeId] = score; save(); }
-    return isBest;
+    if (prev === undefined) { data.scores[modeId] = score; save(); return false; }
+    if (score > prev) { data.scores[modeId] = score; save(); return true; }
+    return false;
   }
 
   /* ── bookmarks ───────────────────────────────────────────────
@@ -743,7 +813,7 @@ MQ.State = (function () {
     weekly, weeklyQuests, claimQuest, weekKey, QUEST_POOL,
     touchStreak, streakBonus,
     recordAnswer, noteStreak, bump, markMode, recordScore,
-    dueReviews, reviewEntry, calibration,
+    dueReviews, reviewEntry, isSpacedRecovery, calibration,
     toggleBookmark, isBookmarked,
     mastery, overallAccuracy,
     usePowerup, grantPowerup, ownsTheme, ownsAvatar,

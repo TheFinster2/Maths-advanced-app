@@ -277,11 +277,22 @@ MQ.Screens.settings = function (view) {
   }
 
   function toggleRow(title, desc, value, onChange) {
-    const sw = U.el("div", { class: "switch" + (value ? " on" : "") });
-    sw.addEventListener("click", () => {
+    /* A real, focusable switch. It was a bare <div>: no role, no state, no tab
+       stop — invisible to a screen reader and unreachable by keyboard, which
+       made every preference in this list impossible to change without a mouse
+       or a precise tap. */
+    const sw = U.el("div", { class: "switch" + (value ? " on" : ""),
+      role: "switch", tabindex: "0", "aria-checked": value ? "true" : "false",
+      "aria-label": title });
+    const flip = () => {
       const on = !sw.classList.contains("on");
       sw.classList.toggle("on", on);
+      sw.setAttribute("aria-checked", on ? "true" : "false");
       onChange(on);
+    };
+    sw.addEventListener("click", flip);
+    sw.addEventListener("keydown", e => {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); }
     });
     return U.el("div", { class: "srow" }, [
       U.el("div", { class: "srow-body" }, [

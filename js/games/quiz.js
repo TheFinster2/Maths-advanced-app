@@ -87,8 +87,23 @@ MQ.QuizCore = (function () {
     if (o.recallCheck) {
       buttons.forEach(b => (b.disabled = true));
       choiceWrap.hidden = true;
+      /* Explained AT the gate, the first time it is ever shown. It is the most
+         prominent new thing on the screen and nothing on screen said what it
+         was for; finding the off-switch meant guessing the word "recall" and
+         scrolling most of the Settings page. Shown once and then never again —
+         a permanent explanation is clutter. */
+      const firstEver = !MQ.State.data.settings.recallSeen;
+      if (firstEver) { MQ.State.data.settings.recallSeen = true; MQ.State.save(); }
+
       gate = U.el("div", { class: "recall-gate" }, [
         U.el("div", { class: "recall-ask", text: "Work it out first — then say how sure you are." }),
+        firstEver ? U.el("div", { class: "recall-why tiny muted" }, [
+          U.el("span", { html:
+            "The options are hidden on purpose: recalling an answer is worth far more than " +
+            "picking one off a list. " }),
+          U.el("button", { class: "linkish", type: "button", text: "Turn this off",
+            on: { click: e => { e.stopPropagation(); MQ.UI.go("/settings"); } } })
+        ]) : null,
         U.el("div", { class: "recall-opts" }, MQ.DATA.CONFIDENCE.map(lvl =>
           U.el("button", { class: "recall-btn recall-" + lvl.id, type: "button", title: lvl.desc }, [
             U.el("span", { class: "recall-ico", text: lvl.icon }),
@@ -111,7 +126,18 @@ MQ.QuizCore = (function () {
       gate.remove();
       gate = null;
       choiceWrap.hidden = false;
-      buttons.forEach(b => (b.disabled = false));
+      choiceWrap.classList.add("choices-in");
+      /* The options appear exactly where the confidence buttons were — the
+         gate occupies the same band of the card — so the second half of a
+         double-tap lands on a live option. That recorded an answer the
+         student never saw, usually wrong: XP penalty, a push into the review
+         queue, and a confidence rating written against an unseen option.
+         MIN_READ_MS cannot catch it because it times from the card rendering,
+         not from the gate clearing.
+
+         So the options stay inert for a beat. Nobody reads four expressions
+         in 450 ms, and a deliberate answer is never that fast. */
+      setTimeout(() => buttons.forEach(b => (b.disabled = false)), 450);
     }
 
     const node = U.el("div", { class: "qcard" }, [
@@ -198,6 +224,7 @@ MQ.Games.quiz = (function () {
        one question at a time, so once the run ends this log is the ONLY record
        of what was asked — there is no marked-up screen to go back to. */
     const log = [];
+    let recovered = 0;
     /* Read once per run, not per question: flipping the setting mid-run would
        change the rules halfway through and make the calibration figures a
        mixture of two different measurements. */
@@ -208,9 +235,17 @@ MQ.Games.quiz = (function () {
     let timeLeft = c.totalTime, timerId = null, finished = false;
 
     const shell = UI.gameShell(c.title, { confirmExit: true,
-      help: "Answer as many as you can. Wrong answers subtract XP, and answers " +
-            "faster than 1.2 seconds pay nothing — the completion bonus is gated on accuracy, " +
-            "so guessing through a run earns nothing at all." });
+      help: (recallOn && !c.totalTime
+        ? "<b>The options stay hidden until you say how sure you are.</b> Work the answer out " +
+          "first, then tap <b>I know it</b>, <b>I think so</b> or <b>No idea</b> — producing an " +
+          "answer from memory is worth far more than picking one off a list, and rating yourself " +
+          "before you see the options is what makes the calibration on Progress mean anything. " +
+          "Turn it off in Settings → Practice.<br><br>"
+        : "") +
+        (c.totalTime ? "Answer as many as you can. " : "") +
+        "Wrong answers subtract XP, and answers faster than " + (UI.MIN_READ_MS / 1000) +
+        " seconds pay nothing — the completion bonus is gated on accuracy, " +
+        "so guessing through a run earns nothing at all." });
     root.appendChild(shell.root);
 
     const scoreChip  = UI.chip("0 XP");
@@ -274,6 +309,8 @@ MQ.Games.quiz = (function () {
 
     function answer(q, chosen, isCorrect, btn) {
       const conf = card.confidence();
+      /* Asked before recording, because recording changes it. */
+      const recovery = isCorrect && S.isSpacedRecovery(q.id);
       const fb = card.reveal(chosen);
       S.recordAnswer(q.topic, isCorrect, q.id, conf);
       /* A confident miss is the one worth naming out loud. The student thought
@@ -296,13 +333,32 @@ MQ.Games.quiz = (function () {
         streak++;
         bestStreak = Math.max(bestStreak, streak);
         S.noteStreak(bestStreak);
-        const base = 10 * (q.diff || 1);
+        /* A question you missed days ago and have just recalled correctly is
+           worth more than a fresh one you already knew — it is the single
+           most valuable event in the app, and until now it paid the least.
+           Review runs are BY CONSTRUCTION a set you score badly on, so the
+           completion bonus is usually withheld from them; the mode that helps
+           most paid least, and a student optimising for XP was pushed
+           straight back to drilling their best topic. That gate stays (it is
+           what stops guessing through a run), and the premium is paid per
+           question instead, where it cannot be reached by guessing. */
+        const base = 10 * (q.diff || 1) * (recovery ? 2 : 1);
         const gain = tooFast ? 0 : Math.round(base * multiplier() * (doubled ? 2 : 1));
+        if (recovery && gain) {
+          recovered++;
+          UI.toast({ icon: "🌱", kind: "xp", ms: 3000,
+            text: "<b>Recovered.</b> You missed that one before — double XP." });
+        }
         if (tooFast) rushed++;
         xpEarned += gain;
         coinsEarned += tooFast ? 0 : 2 + (q.diff || 1);
         MQ.Sound.correct();
-        if (tooFast) UI.toast({ icon: "⏱️", kind: "bad", text: "Too fast to have read that — no XP awarded." });
+        /* Not "too fast to have read that" — the student HAS read it, they just
+           knew it, and being called a cheat for fluency is exactly backwards
+           when fluency is the thing revision produces. Say what happened and
+           what it costs, without the accusation. */
+        if (tooFast) UI.toast({ icon: "⏱️", kind: "bad", ms: 3200,
+          text: "Answered in under " + (UI.MIN_READ_MS / 1000) + "s — that one pays no XP." });
         if (streak > 1 && streak % 5 === 0) {
           MQ.Sound.multiplier(Math.floor(streak / 5));
           UI.toast({ icon: "⚡", kind: "xp", text: `<b>${streak} streak!</b> ×${multiplier()} XP` });
@@ -466,10 +522,17 @@ MQ.Games.quiz = (function () {
       UI.results({
         title: reason || "Run complete",
         correct, total: seen, xp: got.xp, coins: got.coins, newBest,
+        /* No "−0 XP / WRONG" tile on a flawless run, and no "−216 XP" on a run
+           where nothing was actually deducted — the XP floors at zero, so the
+           tile was reporting a loss the student never took. */
         extraStats: [
           ["Best streak", bestStreak],
-          ["Wrong", `−${penalty} XP`],
-          insightUsed ? ["Insight", "used"] : (rushed ? ["Rushed", rushed] : ["Multiplier", "×" + multiplier()])
+          penalty && netXp > 0 ? ["Wrong", `−${penalty} XP`]
+            : penalty ? ["Wrong", correct < seen ? (seen - correct) + " missed" : "—"]
+            : ["Accuracy", Math.round(accuracy * 100) + "%"],
+          recovered ? ["Recovered", recovered]
+            : insightUsed ? ["Insight", "used"]
+            : (rushed ? ["Too quick", rushed + " unpaid"] : ["Multiplier", "×" + multiplier()])
         ],
         review: log,
         onAgain: () => UI.handleRoute()
