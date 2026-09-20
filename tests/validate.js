@@ -157,7 +157,7 @@ const BREAKS = {
   /* The bug this whole scheduler replaced: one correct answer clears the
      question. It looks identical from the outside. */
   "one-and-done": ["js/core/state.js",
-    /rec\.box = \(rec\.box \|\| 1\) \+ 1;/, "rec.box = REVIEW_STEPS + 1;"],
+    /rec\.box = boxOf\(rec\) \+ 1;/, "rec.box = REVIEW_STEPS + 1;"],
   /* An unbraced multi-letter subscript, as it actually shipped. */
   "subscript": ["js/data/formulas.js",
     /tex:"S_\{\\\\infty\} = /, 'tex:"S_inf = '],
