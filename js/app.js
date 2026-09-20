@@ -81,10 +81,11 @@ MQ.VERSION = "1.6.0";
      Also where the syllabus course is chosen. Asking once, here, is the whole
      reason the toggle is worth having: defaulting an Advanced-only student
      into Extension 1 content buries them in vectors and induction on day one,
-     and they have no way of knowing the setting exists to turn it off. */
-  /* Immediately, not on a delay. A 900 ms timer let the home screen paint and
-     become tappable first, so the student's first interaction with the app was
-     a full-screen modal stealing a tap they had already committed to. */
+     and they have no way of knowing the setting exists to turn it off.
+
+     Opened immediately, not on a delay. A 900 ms timer let the home screen
+     paint and become tappable first, so the student's very first interaction
+     with the app was a modal stealing a tap they had already committed to. */
   if (S.data.stats.answered === 0 && Object.keys(S.data.history).length === 0) welcome();
 
   /* The course question is the whole modal, and it is ASKED rather than
